@@ -23,15 +23,11 @@ func main() {
 		log.Fatalf("create upload dir: %v", err)
 	}
 
-	store, err := db.Open(filepath.Join(cfg.DataDir, "tasks.json"))
+	store, err := db.Open(filepath.Join(cfg.DataDir, "tasks.db"))
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
 	defer store.Close()
-
-	if err := store.Migrate(); err != nil {
-		log.Fatalf("migrate: %v", err)
-	}
 
 	llmClient := llm.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
 	h := handler.New(store, cfg, llmClient)
