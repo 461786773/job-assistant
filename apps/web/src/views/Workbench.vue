@@ -2,7 +2,7 @@
   <section>
     <div class="hero">
       <h1>工作台</h1>
-      <p>按 JD 建任务，跑通人事评分、业务模拟、谈薪辅助三关。先从一份真实投递开始。</p>
+      <p>按 JD 建任务，跑通简历优化、面试模拟、薪资确认。先从一份真实投递开始。</p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>

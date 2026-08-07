@@ -3,7 +3,7 @@
     <header class="topbar">
       <router-link to="/" class="brand">
         <span class="brand-mark">求职助手</span>
-        <span class="brand-sub">人事 · 业务 · 谈薪</span>
+        <span class="brand-sub">简历优化 · 面试模拟 · 薪资确认</span>
       </router-link>
       <nav class="nav">
         <router-link to="/">工作台</router-link>

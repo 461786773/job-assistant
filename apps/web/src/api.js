@@ -52,6 +52,11 @@ export const api = {
   },
   analyzeHR: (id) =>
     request(`/api/tasks/${id}/hr/analyze`, { method: 'POST', body: '{}' }),
+  applyHRRewrites: (id, body) =>
+    request(`/api/tasks/${id}/hr/apply-rewrites`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   interviewStart: (id) =>
     request(`/api/tasks/${id}/interview/start`, { method: 'POST', body: '{}' }),
   interviewReply: (id, answer) =>
@@ -68,7 +73,7 @@ export const api = {
 
 export const STATUS_LABEL = {
   draft: '草稿',
-  hr_done: '人事关完成',
-  interview_done: '业务关完成',
-  salary_done: '谈薪关完成',
+  hr_done: '简历优化完成',
+  interview_done: '面试模拟完成',
+  salary_done: '薪资确认完成',
 }

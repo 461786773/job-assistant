@@ -36,6 +36,7 @@ func NewRouter(h *handler.Handler, cfg config.Config) http.Handler {
 		r.Delete("/{id}", h.DeleteTask)
 		r.Post("/{id}/resume", h.UploadResume)
 		r.Post("/{id}/hr/analyze", h.AnalyzeHR)
+		r.Post("/{id}/hr/apply-rewrites", h.ApplyHRRewrites)
 		r.Post("/{id}/interview/start", h.InterviewStart)
 		r.Post("/{id}/interview/reply", h.InterviewReply)
 		r.Post("/{id}/salary/analyze", h.SalaryAnalyze)

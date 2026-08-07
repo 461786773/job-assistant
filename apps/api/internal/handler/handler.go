@@ -327,6 +327,138 @@ func (h *Handler) AnalyzeHR(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type applyHRBody struct {
+	Indexes []int  `json:"indexes"`
+	All     bool   `json:"all"`
+	Mode    string `json:"mode"` // ai | direct；默认 ai（无 LLM 时回退 direct）
+}
+
+func (h *Handler) ApplyHRRewrites(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	task, err := h.Store.GetTask(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if task == nil {
+		writeErr(w, http.StatusNotFound, "任务不存在")
+		return
+	}
+	if len(task.HrReport) == 0 {
+		writeErr(w, http.StatusBadRequest, "请先生成简历评分")
+		return
+	}
+	var report hr.Report
+	if err := json.Unmarshal(task.HrReport, &report); err != nil {
+		writeErr(w, http.StatusBadRequest, "简历优化报告损坏，请重新分析")
+		return
+	}
+	if len(report.Rewrites) == 0 {
+		writeErr(w, http.StatusBadRequest, "没有可应用的改写项")
+		return
+	}
+
+	var body applyHRBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "无效 JSON")
+		return
+	}
+	indexes := body.Indexes
+	if body.All {
+		indexes = make([]int, len(report.Rewrites))
+		for i := range report.Rewrites {
+			indexes[i] = i
+		}
+	} else if len(indexes) == 0 {
+		writeErr(w, http.StatusBadRequest, "请指定 indexes 或 all=true")
+		return
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(body.Mode))
+	if mode == "" {
+		mode = "ai"
+	}
+	if mode != "ai" && mode != "direct" {
+		writeErr(w, http.StatusBadRequest, "mode 只能是 ai 或 direct")
+		return
+	}
+
+	prev := task.ResumeText
+	var (
+		next    string
+		results []hr.ApplyResult
+	)
+
+	if mode == "ai" {
+		if h.LLM == nil || !h.LLM.Enabled() {
+			// 无模型时自动降级为直接替换
+			mode = "direct"
+		} else {
+			var aiErr error
+			next, results, aiErr = hr.ApplyRewritesWithAI(
+				h.LLM, task.ResumeText, task.JDText, task.Company, task.TargetRole,
+				report.Rewrites, indexes,
+			)
+			if aiErr != nil {
+				writeErr(w, http.StatusBadGateway, "AI 改写失败: "+aiErr.Error())
+				return
+			}
+		}
+	}
+
+	if mode == "direct" {
+		next, results = hr.ApplyRewrites(task.ResumeText, report.Rewrites, indexes)
+	}
+
+	applied := 0
+	for _, r := range results {
+		if r.OK {
+			applied++
+		}
+	}
+	changed := next != prev && (applied > 0 || (mode == "ai" && strings.TrimSpace(next) != "" && next != prev))
+	// AI 可能整体改写成功但 changes 标记不全
+	if mode == "ai" && next != prev {
+		changed = true
+		if applied == 0 {
+			applied = 1
+			for i := range results {
+				results[i].OK = true
+				if results[i].Method == "" {
+					results[i].Method = "ai"
+				}
+			}
+		}
+	}
+
+	if !changed {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"task":               task,
+			"results":            results,
+			"applied":            0,
+			"previousResumeText": prev,
+			"changed":            false,
+			"mode":               mode,
+		})
+		return
+	}
+
+	task.ResumeText = next
+	task.UpdatedAt = db.Now()
+	if err := h.Store.UpdateTask(task); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"task":               task,
+		"results":            results,
+		"applied":            applied,
+		"previousResumeText": prev,
+		"changed":            true,
+		"mode":               mode,
+	})
+}
+
 func (h *Handler) InterviewStart(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	task, err := h.Store.GetTask(id)
@@ -378,7 +510,7 @@ func (h *Handler) InterviewReply(w http.ResponseWriter, r *http.Request) {
 	}
 	var sess interview.Session
 	if len(task.Interview) == 0 {
-		writeErr(w, http.StatusBadRequest, "请先开始业务关")
+		writeErr(w, http.StatusBadRequest, "请先开始面试模拟")
 		return
 	}
 	if err := json.Unmarshal(task.Interview, &sess); err != nil {

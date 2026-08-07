@@ -80,7 +80,7 @@ func Start(client *llm.Client, resume, jd, company, role string) (*Session, erro
 
 func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role string) (*Session, error) {
 	if sess == nil {
-		return nil, fmt.Errorf("会话不存在，请先开始业务关")
+		return nil, fmt.Errorf("会话不存在，请先开始面试模拟")
 	}
 	if sess.Status == "done" {
 		return sess, nil
@@ -207,7 +207,7 @@ func heuristicReply(sess *Session, answer string, finish bool) *Session {
 
 func formatCoach(d Diagnosis) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("【业务关诊断】深度分 %d\n%s\n", d.DepthScore, d.Summary))
+	b.WriteString(fmt.Sprintf("【面试模拟诊断】深度分 %d\n%s\n", d.DepthScore, d.Summary))
 	if len(d.WeakPoints) > 0 {
 		b.WriteString("薄弱点：\n- " + strings.Join(d.WeakPoints, "\n- ") + "\n")
 	}

@@ -41,9 +41,194 @@ a {
 }
 
 .shell {
-  max-width: 1100px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: 28px 20px 64px;
+  padding: 20px 20px 48px;
+}
+
+.hero-compact {
+  margin-bottom: 16px;
+}
+
+.hero-compact h1 {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.hr-workspace {
+  margin-bottom: 16px;
+}
+
+.workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tri-pane {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.15fr) minmax(300px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  height: calc(100vh - 210px);
+  min-height: 520px;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.pane-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.pane-head-actions {
+  flex-wrap: wrap;
+}
+
+.pane-actions {
+  gap: 6px;
+}
+
+.pane-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  min-height: 0;
+}
+
+.pane-body.pane-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.pane-form .pane-meta {
+  flex-shrink: 0;
+}
+
+.pane-form .grow-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.pane-form .grow-field-jd {
+  flex: 0.75;
+}
+
+.pane-form .grow-field-resume {
+  flex: 1.35;
+}
+
+.pane-form .grow-field textarea {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+}
+
+.pane-sub {
+  margin: 14px 0 8px;
+  font-size: 0.9rem;
+}
+
+.pane-empty {
+  margin: 24px 0;
+  text-align: center;
+}
+
+.tiny-hint {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+}
+
+.score-hero-compact {
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.score-hero-compact .score-num {
+  font-size: 2.4rem;
+}
+
+.dim-grid-stack {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.dim-grid-stack .dim-card {
+  padding: 10px 12px;
+}
+
+.pane .split.rewrite-body {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .tri-pane {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+  }
+
+  .pane {
+    height: auto;
+    max-height: none;
+  }
+
+  .pane-body {
+    max-height: min(70vh, 640px);
+  }
+
+  .pane-body.pane-form {
+    overflow: auto;
+    max-height: min(80vh, 720px);
+  }
+
+  .pane-form .grow-field-jd,
+  .pane-form .grow-field-resume {
+    flex: none;
+  }
+
+  .pane-form .grow-field textarea {
+    min-height: 160px;
+    height: auto;
+    resize: vertical;
+  }
 }
 
 .topbar {
@@ -248,8 +433,8 @@ textarea {
 .gates {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin: 20px 0;
+  gap: 10px;
+  margin: 12px 0 16px;
 }
 
 .gate {
@@ -441,6 +626,16 @@ textarea {
   min-width: 0;
 }
 
+.rewrite-card.applied {
+  border-color: rgba(15, 110, 86, 0.4);
+  background: rgba(15, 110, 86, 0.06);
+}
+
+.badge-ok {
+  background: rgba(15, 110, 86, 0.14);
+  color: #0f6e56;
+}
+
 .rewrite-card pre {
   margin: 0;
   white-space: pre-wrap;
@@ -457,6 +652,7 @@ textarea {
   justify-content: space-between;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .rewrite-body pre {
