@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-release/
+data/
+.env
+*.db
+.DS_Store
+apps/api/server
+apps/api/job-assistant
+bin/
