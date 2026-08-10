@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/zhangyongjie/job-assistant/internal/auth"
 	"github.com/zhangyongjie/job-assistant/internal/config"
 	"github.com/zhangyongjie/job-assistant/internal/db"
 	"github.com/zhangyongjie/job-assistant/internal/handler"
@@ -29,9 +31,15 @@ func main() {
 	}
 	defer store.Close()
 
+	secret, err := auth.LoadOrCreateSecret(cfg.JWTSecret, filepath.Join(cfg.DataDir, ".jwt_secret"))
+	if err != nil {
+		log.Fatalf("jwt secret: %v", err)
+	}
+	tokens := auth.NewTokenManager(secret, 30*24*time.Hour)
+
 	llmClient := llm.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.LLMModel)
-	h := handler.New(store, cfg, llmClient)
-	r := server.NewRouter(h, cfg)
+	h := handler.New(store, cfg, llmClient, tokens)
+	r := server.NewRouter(h, cfg, tokens)
 
 	log.Printf("求职助手 API listening on %s", cfg.Addr)
 	log.Printf("data=%s uploads=%s llm=%v", cfg.DataDir, cfg.UploadDir, llmClient.Enabled())

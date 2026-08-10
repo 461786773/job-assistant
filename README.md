@@ -8,6 +8,7 @@
 
 ## 功能
 
+- 账号体系：注册 / 登录，任务按用户隔离
 - Web 工作台（Vue 3）：简历优化 / 面试模拟 / 薪资确认
 - Go API + SQLite 持久化（`data/tasks.db`，纯 Go 驱动）；简历 md/txt/docx/PDF（文本型）
 - LLM：OpenAI 兼容中转或 DeepSeek 官方
@@ -21,11 +22,11 @@ chmod +x scripts/*.sh scripts/deploy/*.sh
 ./scripts/dev-watch.sh
 ```
 
-浏览器打开 http://127.0.0.1:5173
+浏览器打开 http://127.0.0.1:5173 ，先注册账号再使用。
 
 一体启动：`./scripts/dev.sh` → http://127.0.0.1:8080
 
-配置：复制 `.env.example` 为 `.env`，填写 `JA_LLM_*`。
+配置：复制 `.env.example` 为 `.env`，填写 `JA_LLM_*`。可选 `JA_JWT_SECRET`（不填则自动生成到 `data/.jwt_secret`）。
 
 ## 腾讯云部署打包
 

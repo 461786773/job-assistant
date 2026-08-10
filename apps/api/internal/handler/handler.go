@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/zhangyongjie/job-assistant/internal/auth"
 	"github.com/zhangyongjie/job-assistant/internal/config"
 	"github.com/zhangyongjie/job-assistant/internal/db"
 	"github.com/zhangyongjie/job-assistant/internal/hr"
@@ -24,13 +25,14 @@ import (
 )
 
 type Handler struct {
-	Store *db.Store
-	Cfg   config.Config
-	LLM   *llm.Client
+	Store  *db.Store
+	Cfg    config.Config
+	LLM    *llm.Client
+	Tokens *auth.TokenManager
 }
 
-func New(store *db.Store, cfg config.Config, llmClient *llm.Client) *Handler {
-	return &Handler{Store: store, Cfg: cfg, LLM: llmClient}
+func New(store *db.Store, cfg config.Config, llmClient *llm.Client, tokens *auth.TokenManager) *Handler {
+	return &Handler{Store: store, Cfg: cfg, LLM: llmClient, Tokens: tokens}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -58,7 +60,11 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.Store.ListTasks()
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
+	tasks, err := h.Store.ListTasks(claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -67,8 +73,12 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -90,6 +100,10 @@ type createTaskBody struct {
 }
 
 func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	var body createTaskBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, "无效的 JSON")
@@ -106,6 +120,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task := &db.Task{
 		ID:         newID(),
+		UserID:     claims.UserID,
 		Title:      title,
 		Company:    strings.TrimSpace(body.Company),
 		TargetRole: strings.TrimSpace(body.TargetRole),
@@ -137,8 +152,12 @@ type updateTaskBody struct {
 }
 
 func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -185,8 +204,16 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	if err := h.Store.DeleteTask(id); err != nil {
+	if err := h.Store.DeleteTask(id, claims.UserID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeErr(w, http.StatusNotFound, "任务不存在")
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -194,8 +221,12 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UploadResume(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -251,6 +282,9 @@ func (h *Handler) UploadResume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ParseResume(w http.ResponseWriter, r *http.Request) {
+	if requireUser(w, r) == nil {
+		return
+	}
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		writeErr(w, http.StatusBadRequest, "无法解析上传文件（限制 20MB）")
 		return
@@ -282,8 +316,12 @@ func (h *Handler) ParseResume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AnalyzeHR(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -334,8 +372,12 @@ type applyHRBody struct {
 }
 
 func (h *Handler) ApplyHRRewrites(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -460,8 +502,12 @@ func (h *Handler) ApplyHRRewrites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) InterviewStart(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -491,8 +537,12 @@ func (h *Handler) InterviewStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) InterviewReply(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -537,8 +587,12 @@ func (h *Handler) InterviewReply(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SalaryAnalyze(w http.ResponseWriter, r *http.Request) {
+	claims := requireUser(w, r)
+	if claims == nil {
+		return
+	}
 	id := chi.URLParam(r, "id")
-	task, err := h.Store.GetTask(id)
+	task, err := h.Store.GetTask(id, claims.UserID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

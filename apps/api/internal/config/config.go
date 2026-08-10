@@ -15,6 +15,9 @@ type Config struct {
 	LLMBaseURL string
 	LLMAPIKey  string
 	LLMModel   string
+
+	// Auth
+	JWTSecret string
 }
 
 func Load() Config {
@@ -28,6 +31,7 @@ func Load() Config {
 		LLMBaseURL: env("JA_LLM_BASE_URL", ""),
 		LLMAPIKey:  env("JA_LLM_API_KEY", ""),
 		LLMModel:   env("JA_LLM_MODEL", "gpt-4o-mini"),
+		JWTSecret:  env("JA_JWT_SECRET", ""),
 	}
 }
 

@@ -1,5 +1,7 @@
 const API_BASE = ''
 
+import { clearSession, getToken } from './auth'
+
 function networkHint(err) {
   const msg = err && err.message ? err.message : String(err)
   if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed')) {
@@ -10,21 +12,34 @@ function networkHint(err) {
 
 async function request(path, options = {}) {
   let res
+  const token = getToken()
+  const headers = {
+    ...(options.body && !(options.body instanceof FormData)
+      ? { 'Content-Type': 'application/json' }
+      : {}),
+    ...options.headers,
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      headers: {
-        ...(options.body && !(options.body instanceof FormData)
-          ? { 'Content-Type': 'application/json' }
-          : {}),
-        ...options.headers,
-      },
       ...options,
+      headers,
     })
   } catch (err) {
     throw new Error(networkHint(err))
   }
   if (res.status === 204) return null
   const data = await res.json().catch(() => ({}))
+  if (res.status === 401) {
+    clearSession()
+    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+      window.location.assign(`/login?redirect=${redirect}`)
+    }
+    throw new Error(data.error || '请先登录')
+  }
   if (!res.ok) {
     throw new Error(data.error || `请求失败 (${res.status})`)
   }
@@ -33,6 +48,11 @@ async function request(path, options = {}) {
 
 export const api = {
   health: () => request('/api/health'),
+  register: (body) =>
+    request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body) =>
+    request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  me: () => request('/api/auth/me'),
   listTasks: () => request('/api/tasks/'),
   getTask: (id) => request(`/api/tasks/${id}`),
   createTask: (body) =>
