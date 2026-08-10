@@ -15,6 +15,7 @@ type User struct {
 	ID           string `json:"id"`
 	Username     string `json:"username"`
 	PasswordHash string `json:"-"`
+	PrimaryNeed  string `json:"primaryNeed,omitempty"`
 	CreatedAt    string `json:"createdAt"`
 }
 
@@ -26,9 +27,9 @@ func newUserID() string {
 
 func (s *Store) CreateUser(u *User) error {
 	_, err := s.db.Exec(`
-INSERT INTO users (id, username, password_hash, created_at)
-VALUES (?, ?, ?, ?)`,
-		u.ID, u.Username, u.PasswordHash, u.CreatedAt,
+INSERT INTO users (id, username, password_hash, primary_need, created_at)
+VALUES (?, ?, ?, ?, ?)`,
+		u.ID, u.Username, u.PasswordHash, u.PrimaryNeed, u.CreatedAt,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -58,7 +59,6 @@ func (s *Store) EnsureUser(username string) (*User, error) {
 		u.ID = DefaultUserID
 	}
 	if err := s.CreateUser(u); err != nil {
-		// race: another request created it
 		if strings.Contains(err.Error(), "用户名已存在") {
 			return s.GetUserByUsername(username)
 		}
@@ -71,26 +71,37 @@ func (s *Store) seedDefaultUser() error {
 	if _, err := s.EnsureUser(DefaultUsername); err != nil {
 		return err
 	}
-	// 归属无主任务到默认用户，便于旧数据继续可见
 	_, err := s.db.Exec(`UPDATE tasks SET user_id = ? WHERE user_id = '' OR user_id IS NULL`, DefaultUserID)
 	return err
 }
 
 func (s *Store) GetUserByUsername(username string) (*User, error) {
 	row := s.db.QueryRow(`
-SELECT id, username, password_hash, created_at FROM users WHERE username = ?`, username)
+SELECT id, username, password_hash, COALESCE(primary_need, ''), created_at FROM users WHERE username = ?`, username)
 	return scanUser(row)
 }
 
 func (s *Store) GetUserByID(id string) (*User, error) {
 	row := s.db.QueryRow(`
-SELECT id, username, password_hash, created_at FROM users WHERE id = ?`, id)
+SELECT id, username, password_hash, COALESCE(primary_need, ''), created_at FROM users WHERE id = ?`, id)
 	return scanUser(row)
+}
+
+func (s *Store) UpdateUserPrimaryNeed(userID, need string) error {
+	res, err := s.db.Exec(`UPDATE users SET primary_need = ? WHERE id = ?`, need, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
 }
 
 func scanUser(row *sql.Row) (*User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.PrimaryNeed, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

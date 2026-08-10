@@ -1,17 +1,17 @@
 # 求职助手 / Job Assistant
 
-面向 **3–10 年** ToB / 安全 / 合规迁移求职者的**职场心理教练**：稳住状态 → 理清选择 → 过关训练（人事 / 业务 / 谈薪）。
+面向 **3–10 年** ToB / 安全 / 合规人群的**职场心理教练**。主路径：链接登录 → 心理评测与 AI 分析 → 确认诉求 → 回看评估 → AI 疏导（可预约私人辅导）→ 按需求职三关或晋升/沟通服务 → 问卷跟踪。
 
-**English:** Job Assistant is a workplace psychology coach for mid-level professionals (3–10 years) in ToB / security / compliance moves—stabilize under pressure, clarify choices, then train the three hiring gates when needed.
+**English:** Job Assistant is a workplace psychological coach: link login, first assessment with AI analysis, need confirmation, reviewable results, AI counseling (plus private counseling booking), then optional job-search gates or promotion/communication services, with questionnaire-based wellbeing tracking.
 
-产品方案见 [`docs/产品方案_v1.md`](docs/产品方案_v1.md)。
+产品方案见 [`docs/产品方案_v1.md`](docs/产品方案_v1.md)（主故事线 §0.4）；问卷见 [`docs/初次心理评估问卷.md`](docs/初次心理评估问卷.md)、[`docs/三分钟自评表.md`](docs/三分钟自评表.md)。
 
 ## 功能
 
-- **职场心理教练**：求职 / 晋升 / 沟通三场景会话（含行动卡与危机转介）
-- **心理健康跟踪**：压力/情绪打卡 + 近 7/30 日摘要（仅本人可见）
-- **过关训练**：人事关评分改写 · 业务关模拟 · 谈薪关对照
-- 账号：用户名隔离（初期无密码）；Vue 3 + Go + SQLite；LLM 服务端配置
+- **主故事线**：链接登录 · 初次评测 + AI 分析 · 诉求确认 · 我的评估 · AI 疏导 · 私人辅导预约 · 问卷跟踪
+- **求职子流程**：人事 → 业务 → 谈薪
+- **晋升 / 沟通**：对应场景服务
+- 账号受控访问；Vue 3 + Go + SQLite；LLM 服务端配置
 
 ## 本地启动
 
@@ -22,7 +22,7 @@ chmod +x scripts/*.sh scripts/deploy/*.sh
 ./scripts/dev-watch.sh
 ```
 
-浏览器打开 http://127.0.0.1:5173 ，输入用户名后进入**教练工作台**。
+浏览器打开 http://127.0.0.1:5173 ，输入用户名后走主故事线（新用户先评测与诉求确认）。
 
 一体启动：`./scripts/dev.sh` → http://127.0.0.1:8080
 

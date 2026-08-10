@@ -109,6 +109,9 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)`); err != nil {
 		return fmt.Errorf("migrate index: %w", err)
 	}
+	if err := s.migrateAssessmentBooking(); err != nil {
+		return fmt.Errorf("migrate assessment/booking: %w", err)
+	}
 	if err := s.seedDefaultUser(); err != nil {
 		return fmt.Errorf("seed default user: %w", err)
 	}

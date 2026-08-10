@@ -74,9 +74,43 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "用户不存在")
 		return
 	}
+	hasAssessment, err := h.Store.HasInitialAssessment(claims.UserID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var latestID, latestAt, suggestedNeed, crisisLevel string
+	if hasAssessment {
+		if latest, err := h.Store.LatestInitialAssessment(claims.UserID); err == nil && latest != nil {
+			latestID = latest.ID
+			latestAt = latest.CompletedAt
+			crisisLevel = latest.CrisisLevel
+			var metrics struct {
+				SuggestedNeed string `json:"suggestedNeed"`
+			}
+			_ = json.Unmarshal(latest.Metrics, &metrics)
+			suggestedNeed = metrics.SuggestedNeed
+			if suggestedNeed == "" {
+				switch latest.PrimaryScene {
+				case "job_search", "promotion", "communication":
+					suggestedNeed = latest.PrimaryScene
+				case "mixed":
+					suggestedNeed = "unsure"
+				default:
+					suggestedNeed = "counsel_first"
+				}
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":       user.ID,
-		"username": user.Username,
+		"id":                   user.ID,
+		"username":             user.Username,
+		"primaryNeed":          user.PrimaryNeed,
+		"hasInitialAssessment": hasAssessment,
+		"latestAssessmentId":   latestID,
+		"latestAssessmentAt":   latestAt,
+		"suggestedNeed":        suggestedNeed,
+		"crisisLevel":          crisisLevel,
 	})
 }
 

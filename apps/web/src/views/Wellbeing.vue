@@ -2,7 +2,7 @@
   <section>
     <div class="hero">
       <h1>心理健康跟踪</h1>
-      <p>轻量打卡，看见状态与事件的关联。不做临床诊断，数据仅本人可见。</p>
+      <p>轻量打卡与三分钟自评，看见状态与事件的关联。不做临床诊断，数据仅本人可见。</p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -10,6 +10,10 @@
     <div class="coach-home-grid">
       <section class="panel">
         <h2 class="section-title">今日打卡</h2>
+        <p class="muted" style="margin-bottom: 12px">
+          不到一分钟的压力/情绪记录；若想更完整地命名状态，可用
+          <router-link to="/wellbeing/quick">三分钟自评</router-link>。
+        </p>
         <form class="form" @submit.prevent="submit">
           <label>
             压力分（1–10）
@@ -36,9 +40,12 @@
             一句话备注
             <textarea v-model="form.note" rows="2" placeholder="可选：今天触发点是什么" />
           </label>
-          <button class="btn btn-primary" type="submit" :disabled="busy">
-            {{ busy ? '保存中…' : '保存打卡' }}
-          </button>
+          <div class="row" style="flex-wrap: wrap; gap: 8px">
+            <button class="btn btn-primary" type="submit" :disabled="busy">
+              {{ busy ? '保存中…' : '保存打卡' }}
+            </button>
+            <router-link class="btn btn-ghost" to="/wellbeing/quick">三分钟自评</router-link>
+          </div>
         </form>
       </section>
 
@@ -69,6 +76,31 @@
     </div>
 
     <section class="panel" style="margin-top: 16px">
+      <div class="workspace-toolbar">
+        <h2 class="section-title" style="margin: 0">最近三分钟自评</h2>
+        <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">新填一份</router-link>
+      </div>
+      <p v-if="quickLoading" class="muted">加载中…</p>
+      <p v-else-if="!quickItems.length" class="muted">还没有自评。会话开场或高压节点后可快速填一份。</p>
+      <ul v-else class="checkin-list">
+        <li v-for="q in quickItems" :key="q.id">
+          <div>
+            <strong>困扰 {{ q.distressScore }}/10</strong>
+            <span class="muted"> · {{ formatTime(q.at) }}</span>
+            <div class="meta">
+              <span>{{ feelingLabels(q.feelings) }}</span>
+              <span v-if="q.takeaway"> · {{ takeawayLabel(q.takeaway) }}</span>
+              <span v-if="q.relatedCoachSessionId">
+                · <router-link :to="`/coach/${q.relatedCoachSessionId}`">关联会话</router-link>
+              </span>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" @click="removeQuick(q.id)">删除</button>
+        </li>
+      </ul>
+    </section>
+
+    <section class="panel" style="margin-top: 16px">
       <h2 class="section-title">最近打卡</h2>
       <p v-if="loading" class="muted">加载中…</p>
       <p v-else-if="!items.length" class="muted">还没有记录。</p>
@@ -92,12 +124,20 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { api, EVENT_OPTIONS, MOOD_OPTIONS } from '../api'
+import {
+  api,
+  EVENT_OPTIONS,
+  FEELING_OPTIONS,
+  MOOD_OPTIONS,
+  TAKEAWAY_OPTIONS,
+} from '../api'
 
 const loading = ref(true)
+const quickLoading = ref(true)
 const busy = ref(false)
 const error = ref('')
 const items = ref([])
+const quickItems = ref([])
 const summary = ref(null)
 const form = reactive({
   stressScore: 5,
@@ -125,17 +165,30 @@ function eventLabel(v) {
   return EVENT_OPTIONS.find((e) => e.value === v)?.label || v
 }
 
+function feelingLabels(values) {
+  return (values || [])
+    .map((v) => FEELING_OPTIONS.find((o) => o.value === v)?.label || v)
+    .join('、')
+}
+
+function takeawayLabel(v) {
+  return TAKEAWAY_OPTIONS.find((o) => o.value === v)?.label || v
+}
+
 async function refresh() {
   loading.value = true
+  quickLoading.value = true
   error.value = ''
   try {
-    const data = await api.listCheckIns()
+    const [data, quick] = await Promise.all([api.listCheckIns(), api.listQuickSelfChecks()])
     items.value = data.items || []
     summary.value = data.summary || null
+    quickItems.value = quick.items || []
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
+    quickLoading.value = false
   }
 }
 
@@ -164,6 +217,16 @@ async function remove(id) {
   if (!confirm('删除这条打卡？')) return
   try {
     await api.deleteCheckIn(id)
+    await refresh()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function removeQuick(id) {
+  if (!confirm('删除这份自评？')) return
+  try {
+    await api.deleteQuickSelfCheck(id)
     await refresh()
   } catch (e) {
     error.value = e.message

@@ -37,24 +37,28 @@ func SceneLabel(scene string) string {
 	return scene
 }
 
-func Start(client *llm.Client, scene, relatedEvent, taskHint string) (*db.CoachSession, error) {
+func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, primaryNeed string) (*db.CoachSession, error) {
 	sess := &db.CoachSession{
-		Scene:       scene,
-		Title:       SceneLabel(scene) + " · 教练会话",
+		Scene:        scene,
+		Title:        SceneLabel(scene) + " · 教练会话",
 		RelatedEvent: relatedEvent,
-		Messages:    []db.CoachMessage{},
-		ActionItems: []string{},
-		Scripts:     []string{},
-		Status:      "active",
+		Messages:     []db.CoachMessage{},
+		ActionItems:  []string{},
+		Scripts:      []string{},
+		Status:       "active",
 	}
 
-	opening := heuristicOpening(scene, relatedEvent)
+	opening := heuristicOpening(scene, relatedEvent, quickHint, assessmentHint)
 	if client != nil && client.Enabled() {
 		user := fmt.Sprintf(`场景：%s（%s）
+用户诉求：%s
 关联事件：%s
 关联任务摘要：%s
+初次评测摘要：%s
+三分钟自评摘要：%s
 
-请给出开场：先确认场景与当前节点，邀请用户用 2–3 句描述「发生了什么」和「此刻最卡住的感受」。
+请给出开场：结合评测与自评（禁止诊断病名），邀请用户用 2–3 句补充「发生了什么」。
+若困扰分≥8 或评测危机偏高，语气放缓并轻提示专业支持 / 预约通道。
 输出 JSON：
 {
   "reply":"教练开场",
@@ -62,7 +66,7 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint string) (*db.CoachS
   "scripts":[],
   "crisisFlag":false,
   "suggestGate":""
-}`, scene, SceneLabel(scene), relatedEvent, truncate(taskHint, 800))
+}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(assessmentHint, 800), truncate(quickHint, 600))
 		raw, err := client.ChatJSON(systemPrompt, user)
 		if err == nil {
 			var out struct {
@@ -154,12 +158,84 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
 	return sess, nil
 }
 
-func heuristicOpening(scene, event string) string {
+func heuristicOpening(scene, event, quickHint, assessmentHint string) string {
 	base := fmt.Sprintf("我们先从「%s」这个节点聊。", SceneLabel(scene))
 	if strings.TrimSpace(event) != "" {
 		base += fmt.Sprintf("你提到和「%s」有关。", event)
 	}
+	if strings.TrimSpace(assessmentHint) != "" {
+		base += "\n\n你的初次评测里，我记下了这些要点（描述性摘要，不是诊断）：\n" + truncate(strings.TrimSpace(assessmentHint), 500)
+	}
+	if strings.TrimSpace(quickHint) != "" {
+		base += "\n\n刚才的三分钟自评：\n" + strings.TrimSpace(quickHint)
+		if strings.Contains(quickHint, "困扰分 8") || strings.Contains(quickHint, "困扰分 9") || strings.Contains(quickHint, "困扰分 10") {
+			base += "\n\n你现在的困扰分偏高。我们可以先把步子放慢；若持续很难受，也可预约私人心理辅导通道——我这边是职场教练，不能替代诊疗。"
+		}
+		base += "\n\n想先补充一两句：最近具体发生了什么？还是直接从「今天想带走的那一点」聊起？"
+		return base
+	}
 	return base + "可以先用两三句话告诉我：刚才实际发生了什么？以及你此刻最卡住的一个感受是什么？（我会帮你把事实和自我评判拆开。）"
+}
+
+var feelingLabel = map[string]string{
+	"tired": "累", "irritable": "烦", "numb": "空",
+	"afraid": "怕", "stuck": "堵", "indifferent": "无所谓",
+}
+var durationLabel = map[string]string{
+	"few_days": "就这两三天", "one_two_weeks": "一两周了",
+	"over_month": "一个月以上", "unclear_chronic": "说不清，好像一直这样",
+}
+var impactLabel = map[string]string{
+	"sleep": "睡眠", "appetite": "胃口", "focus": "集中力",
+	"temper": "脾气", "body": "身体", "mood_only": "主要是心里不爽",
+}
+var takeawayLabel = map[string]string{
+	"clarity": "想通一件事", "strength": "找回一点力量", "tiny_tool": "有一个能用的小办法",
+	"just_talk": "只是想找个人说说话", "unsure_but_here": "我也不知道想带走什么，但我来了",
+}
+
+// FormatQuickCheck turns a saved self-check into coach context (no diagnosis).
+func FormatQuickCheck(c *db.QuickSelfCheck) string {
+	if c == nil {
+		return ""
+	}
+	feelings := make([]string, 0, len(c.Feelings))
+	for _, f := range c.Feelings {
+		if v, ok := feelingLabel[f]; ok {
+			feelings = append(feelings, v)
+		} else {
+			feelings = append(feelings, f)
+		}
+	}
+	impacts := make([]string, 0, len(c.Impacts))
+	for _, i := range c.Impacts {
+		if v, ok := impactLabel[i]; ok {
+			impacts = append(impacts, v)
+		} else {
+			impacts = append(impacts, i)
+		}
+	}
+	lines := []string{
+		fmt.Sprintf("- 感觉：%s", strings.Join(feelings, "、")),
+		fmt.Sprintf("- 持续：%s", orDash(durationLabel[c.Duration], c.Duration)),
+		fmt.Sprintf("- 影响：%s", strings.Join(impacts, "、")),
+		fmt.Sprintf("- 困扰分 %d/10", c.DistressScore),
+		fmt.Sprintf("- 今天想带走：%s", orDash(takeawayLabel[c.Takeaway], c.Takeaway)),
+	}
+	if strings.TrimSpace(c.TriggerNote) != "" {
+		lines = append(lines, "- 触发事件："+strings.TrimSpace(c.TriggerNote))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func orDash(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	if strings.TrimSpace(b) != "" {
+		return b
+	}
+	return "—"
 }
 
 func heuristicReply(sess *db.CoachSession, userText string) *db.CoachSession {

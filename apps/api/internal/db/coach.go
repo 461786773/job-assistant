@@ -12,19 +12,19 @@ type CoachMessage struct {
 }
 
 type CoachSession struct {
-	ID             string         `json:"id"`
-	UserID         string         `json:"userId"`
-	Scene          string         `json:"scene"` // job_search | promotion | communication
-	Title          string         `json:"title"`
-	RelatedTaskID  string         `json:"relatedTaskId,omitempty"`
-	RelatedEvent   string         `json:"relatedEvent,omitempty"`
-	Messages       []CoachMessage `json:"messages"`
-	ActionItems    []string       `json:"actionItems"`
-	Scripts        []string       `json:"scripts"`
-	CrisisFlag     bool           `json:"crisisFlag"`
-	Status         string         `json:"status"` // active | done
-	CreatedAt      string         `json:"createdAt"`
-	UpdatedAt      string         `json:"updatedAt"`
+	ID            string         `json:"id"`
+	UserID        string         `json:"userId"`
+	Scene         string         `json:"scene"` // job_search | promotion | communication
+	Title         string         `json:"title"`
+	RelatedTaskID string         `json:"relatedTaskId,omitempty"`
+	RelatedEvent  string         `json:"relatedEvent,omitempty"`
+	Messages      []CoachMessage `json:"messages"`
+	ActionItems   []string       `json:"actionItems"`
+	Scripts       []string       `json:"scripts"`
+	CrisisFlag    bool           `json:"crisisFlag"`
+	Status        string         `json:"status"` // active | done
+	CreatedAt     string         `json:"createdAt"`
+	UpdatedAt     string         `json:"updatedAt"`
 }
 
 func (s *Store) migrateCoachWellbeing() error {
@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS wellbeing_checkins (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_wellbeing_user_at ON wellbeing_checkins(user_id, at);
+CREATE TABLE IF NOT EXISTS quick_self_checks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  version TEXT NOT NULL DEFAULT 'v1',
+  feelings TEXT,
+  duration TEXT NOT NULL DEFAULT '',
+  impacts TEXT,
+  distress_score INTEGER NOT NULL DEFAULT 0,
+  trigger_note TEXT NOT NULL DEFAULT '',
+  takeaway TEXT NOT NULL DEFAULT '',
+  related_coach_session_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_quick_checks_user_at ON quick_self_checks(user_id, at);
 `
 	_, err := s.db.Exec(schema)
 	return err

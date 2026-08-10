@@ -421,6 +421,16 @@ select {
   background: rgba(255, 255, 255, 0.7);
 }
 
+input[type='checkbox'],
+input[type='radio'] {
+  width: auto;
+  min-width: 1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--accent, #0f6e56);
+}
+
 textarea {
   min-height: 140px;
   resize: vertical;
@@ -876,9 +886,29 @@ textarea {
   border-color: rgba(15, 110, 86, 0.4);
 }
 
+.scene-card.selected {
+  border-color: rgba(15, 110, 86, 0.55);
+  background: rgba(15, 110, 86, 0.08);
+}
+
 .scene-card span {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.progress-bar {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 110, 86, 0.12);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent, #0f6e56);
+  border-radius: 999px;
+  transition: width 200ms ease;
 }
 
 .coach-layout {
@@ -975,9 +1005,74 @@ textarea {
 .tag-check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin: 4px 10px 4px 0;
+  gap: 8px;
+  margin: 4px 12px 4px 0;
   font-weight: 500;
+  width: auto;
+}
+
+.tag-check input[type='checkbox'],
+.tag-check input[type='radio'] {
+  width: auto;
+  min-width: 1rem;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent, #0f6e56);
+}
+
+.quick-form {
+  display: grid;
+  gap: 16px;
+}
+
+.quick-form > label {
+  display: grid;
+  gap: 8px;
+}
+
+.option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 0;
+  font-weight: 500;
+  line-height: 1.45;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.option-row input[type='radio'],
+.option-row input[type='checkbox'] {
+  width: auto;
+  min-width: 1rem;
+  height: auto;
+  margin: 3px 0 0;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--accent, #0f6e56);
+}
+
+.option-row span {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.score-row input[type='range'] {
+  flex: 1;
+  width: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .checkin-list {

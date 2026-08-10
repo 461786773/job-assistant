@@ -2,12 +2,33 @@
   <section>
     <div class="hero">
       <h1>教练工作台</h1>
-      <p>职场心理教练陪你过求职、晋升、沟通节点；需要时再调用人事 / 业务 / 谈薪过关训练。</p>
+      <p>
+        按主故事线：疏导前先完成问卷；需要时可预约私人辅导；找工作再进三关。
+      </p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="coach-home-grid">
+      <section class="panel">
+        <h2 class="section-title">我的路径</h2>
+        <p v-if="profileLoading" class="muted">加载中…</p>
+        <template v-else>
+          <p>
+            当前诉求：
+            <strong>{{ NEED_LABEL[profile?.primaryNeed] || '未设置' }}</strong>
+          </p>
+          <p v-if="profile?.latestAssessmentAt" class="muted">
+            最近评测：{{ formatTime(profile.latestAssessmentAt) }}
+          </p>
+          <div class="row" style="margin-top: 12px; flex-wrap: wrap; gap: 8px">
+            <router-link class="btn btn-ghost" to="/assessments">我的评估</router-link>
+            <router-link class="btn btn-ghost" to="/booking">私人辅导预约</router-link>
+            <router-link class="btn btn-ghost" to="/onboarding/need">调整诉求</router-link>
+          </div>
+        </template>
+      </section>
+
       <section class="panel">
         <h2 class="section-title">本周状态</h2>
         <p v-if="summaryLoading" class="muted">加载中…</p>
@@ -22,39 +43,39 @@
               <div class="muted">近 7 日打卡</div>
             </div>
           </div>
-          <p v-if="!summary?.checkInCount7" class="muted">还没有打卡。高压节点后记一笔，方便回看触发点。</p>
-          <div class="row" style="margin-top: 14px">
+          <div class="row" style="margin-top: 14px; flex-wrap: wrap; gap: 8px">
+            <router-link class="btn btn-primary" to="/wellbeing/quick">三分钟自评</router-link>
             <router-link class="btn btn-ghost" to="/wellbeing">心理跟踪</router-link>
           </div>
         </template>
       </section>
-
-      <section class="panel">
-        <h2 class="section-title">开始教练</h2>
-        <p class="muted">选一个当前节点，进入澄清 → 行动。</p>
-        <div class="scene-grid">
-          <button
-            v-for="s in scenes"
-            :key="s.value"
-            class="scene-card"
-            type="button"
-            :disabled="starting"
-            @click="startCoach(s.value)"
-          >
-            <strong>{{ s.label }}</strong>
-            <span>{{ s.desc }}</span>
-          </button>
-        </div>
-      </section>
     </div>
+
+    <section class="panel" style="margin-top: 16px">
+      <h2 class="section-title">AI 心理疏导</h2>
+      <p class="muted">进入疏导前需在近 24 小时内完成三分钟自评（问卷门禁）。</p>
+      <div class="scene-grid">
+        <button
+          v-for="s in visibleScenes"
+          :key="s.value"
+          class="scene-card"
+          type="button"
+          :disabled="starting"
+          @click="startCoach(s.value)"
+        >
+          <strong>{{ s.label }}</strong>
+          <span>{{ s.desc }}</span>
+        </button>
+      </div>
+    </section>
 
     <section class="panel" style="margin-top: 16px">
       <div class="workspace-toolbar">
         <h2 class="section-title" style="margin: 0">最近教练会话</h2>
-        <router-link class="btn btn-ghost btn-sm" to="/wellbeing">去打卡</router-link>
+        <router-link class="btn btn-ghost btn-sm" to="/booking">去预约</router-link>
       </div>
       <p v-if="sessionsLoading" class="muted">加载中…</p>
-      <p v-else-if="!sessions.length" class="muted">还没有会话。从上方场景开始第一次教练。</p>
+      <p v-else-if="!sessions.length" class="muted">还没有会话。从上方场景开始第一次疏导。</p>
       <div v-else class="grid" style="margin-top: 12px">
         <router-link
           v-for="s in sessions"
@@ -74,12 +95,12 @@
       </div>
     </section>
 
-    <section class="panel" style="margin-top: 16px">
+    <section v-if="showJobGates" class="panel" style="margin-top: 16px">
       <div class="workspace-toolbar">
-        <h2 class="section-title" style="margin: 0">过关训练</h2>
+        <h2 class="section-title" style="margin: 0">求职过关训练</h2>
         <router-link class="btn btn-primary btn-sm" to="/tasks/new">新建任务</router-link>
       </div>
-      <p class="muted">简历人事关 · 业务模拟 · 谈薪对照——需要练表达时再进。</p>
+      <p class="muted">人事 → 业务 → 谈薪。需要练表达时再进。</p>
       <p v-if="tasksLoading" class="muted">加载中…</p>
       <p v-else-if="!tasks.length" class="muted">暂无求职任务。<router-link to="/tasks">查看全部</router-link></p>
       <div v-else class="grid" style="margin-top: 12px">
@@ -102,13 +123,22 @@
         <router-link class="btn btn-ghost" to="/tasks">全部过关任务</router-link>
       </div>
     </section>
+
+    <section v-else class="panel" style="margin-top: 16px">
+      <h2 class="section-title">分支服务</h2>
+      <p class="muted">
+        当前诉求更偏{{ NEED_LABEL[profile?.primaryNeed] || '疏导' }}。需要找工作时可
+        <router-link to="/tasks">进入求职三关</router-link>
+        ，或先继续上方场景疏导。
+      </p>
+    </section>
   </section>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, SCENE_LABEL, STATUS_LABEL } from '../api'
+import { api, NEED_LABEL, SCENE_LABEL, STATUS_LABEL } from '../api'
 
 const router = useRouter()
 const error = ref('')
@@ -119,12 +149,33 @@ const tasks = ref([])
 const tasksLoading = ref(true)
 const summary = ref(null)
 const summaryLoading = ref(true)
+const profile = ref(null)
+const profileLoading = ref(true)
 
-const scenes = [
+const allScenes = [
   { value: 'job_search', label: '求职 / 跳槽', desc: '挂面、投递耗竭、在职偷投焦虑' },
   { value: 'promotion', label: '晋升 / 述职', desc: '述职压力、与上级预期错位' },
   { value: 'communication', label: '沟通 / 冲突', desc: '会后内耗、边界与诉求' },
 ]
+
+const visibleScenes = computed(() => {
+  const need = profile.value?.primaryNeed
+  if (need === 'promotion') {
+    return [allScenes[1], allScenes[0], allScenes[2]]
+  }
+  if (need === 'communication') {
+    return [allScenes[2], allScenes[1], allScenes[0]]
+  }
+  if (need === 'job_search') {
+    return allScenes
+  }
+  return allScenes
+})
+
+const showJobGates = computed(() => {
+  const need = profile.value?.primaryNeed
+  return !need || need === 'job_search' || need === 'unsure'
+})
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -147,6 +198,13 @@ async function startCoach(scene) {
     const sess = await api.createCoachSession({ scene })
     router.push(`/coach/${sess.id}`)
   } catch (e) {
+    if (e.code === 'quick_check_required' || e.status === 409) {
+      router.push({
+        path: '/wellbeing/quick',
+        query: { next: 'coach', scene },
+      })
+      return
+    }
     error.value = e.message
   } finally {
     starting.value = false
@@ -155,11 +213,13 @@ async function startCoach(scene) {
 
 onMounted(async () => {
   try {
-    const [sessData, taskData, checkData] = await Promise.all([
+    const [me, sessData, taskData, checkData] = await Promise.all([
+      api.me(),
       api.listCoachSessions(),
       api.listTasks(),
       api.listCheckIns(),
     ])
+    profile.value = me
     sessions.value = sessData.items || []
     tasks.value = taskData.items || []
     summary.value = checkData.summary || null
@@ -169,6 +229,7 @@ onMounted(async () => {
     sessionsLoading.value = false
     tasksLoading.value = false
     summaryLoading.value = false
+    profileLoading.value = false
   }
 })
 </script>

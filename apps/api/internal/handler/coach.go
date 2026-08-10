@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/zhangyongjie/job-assistant/internal/coach"
@@ -11,10 +12,14 @@ import (
 )
 
 type createCoachBody struct {
-	Scene         string `json:"scene"`
-	RelatedTaskID string `json:"relatedTaskId"`
-	RelatedEvent  string `json:"relatedEvent"`
+	Scene               string `json:"scene"`
+	RelatedTaskID       string `json:"relatedTaskId"`
+	RelatedEvent        string `json:"relatedEvent"`
+	RelatedQuickCheckID string `json:"relatedQuickCheckId"`
+	SkipQuickGate       bool   `json:"skipQuickGate"` // unused; gate always enforced unless recent check exists
 }
+
+const quickGateHours = 24
 
 func (h *Handler) ListCoachSessions(w http.ResponseWriter, r *http.Request) {
 	claims := requireUser(w, r)
@@ -81,7 +86,51 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		taskHint = task.Title + "\n" + task.Company + " · " + task.TargetRole + "\n" + truncateRunes(task.JDText, 600)
 	}
 
-	sess, err := coach.Start(h.LLM, scene, strings.TrimSpace(body.RelatedEvent), taskHint)
+	quickHint := ""
+	quickID := strings.TrimSpace(body.RelatedQuickCheckID)
+	var quick *db.QuickSelfCheck
+	if quickID != "" {
+		item, err := h.Store.GetQuickSelfCheck(quickID, claims.UserID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if item == nil {
+			writeErr(w, http.StatusBadRequest, "关联自评不存在")
+			return
+		}
+		quick = item
+		quickHint = coach.FormatQuickCheck(item)
+	} else {
+		// 问卷门禁：近 24h 内需有三分钟自评
+		recent, err := h.Store.LatestQuickSelfCheckSince(claims.UserID, time.Now().UTC().Add(-quickGateHours*time.Hour))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if recent == nil {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":    "进入疏导前请先完成三分钟自评",
+				"code":     "quick_check_required",
+				"redirect": "/wellbeing/quick",
+			})
+			return
+		}
+		quick = recent
+		quickID = recent.ID
+		quickHint = coach.FormatQuickCheck(recent)
+	}
+
+	assessmentHint := ""
+	primaryNeed := ""
+	if user, _ := h.Store.GetUserByID(claims.UserID); user != nil {
+		primaryNeed = user.PrimaryNeed
+	}
+	if latest, _ := h.Store.LatestInitialAssessment(claims.UserID); latest != nil {
+		assessmentHint = latest.SummaryForCoach
+	}
+
+	sess, err := coach.Start(h.LLM, scene, strings.TrimSpace(body.RelatedEvent), taskHint, quickHint, assessmentHint, primaryNeed)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
@@ -96,6 +145,11 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if quick != nil && quick.RelatedCoachSessionID == "" {
+		quick.RelatedCoachSessionID = sess.ID
+		_ = h.Store.UpdateQuickSelfCheck(quick)
+	}
+	_ = quickID
 	writeJSON(w, http.StatusCreated, sess)
 }
 

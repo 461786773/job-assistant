@@ -111,3 +111,42 @@ func TestUserCRUD(t *testing.T) {
 		t.Fatalf("ensure idempotent: %v %#v", err, again)
 	}
 }
+
+func TestQuickSelfCheckCRUD(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(filepath.Join(dir, "tasks.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer store.Close()
+
+	now := Now()
+	c := &QuickSelfCheck{
+		ID: "q1", UserID: "u1", At: now, Version: "v1",
+		Feelings: []string{"tired", "afraid"}, Duration: "one_two_weeks",
+		Impacts: []string{"sleep", "focus"}, DistressScore: 7,
+		TriggerNote: "二面挂了", Takeaway: "strength", CreatedAt: now,
+	}
+	if err := store.CreateQuickSelfCheck(c); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	got, err := store.GetQuickSelfCheck("q1", "u1")
+	if err != nil || got == nil || got.DistressScore != 7 || len(got.Feelings) != 2 {
+		t.Fatalf("get: %v %#v", err, got)
+	}
+	other, err := store.GetQuickSelfCheck("q1", "u2")
+	if err != nil || other != nil {
+		t.Fatalf("expected isolation, got %#v err=%v", other, err)
+	}
+	list, err := store.ListQuickSelfChecks("u1", 10)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list: %v %#v", err, list)
+	}
+	got.RelatedCoachSessionID = "sess1"
+	if err := store.UpdateQuickSelfCheck(got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if err := store.DeleteQuickSelfCheck("q1", "u1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+}

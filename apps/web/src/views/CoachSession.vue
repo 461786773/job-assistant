@@ -70,6 +70,8 @@
               打开关联任务
             </router-link>
             <router-link class="btn btn-ghost btn-sm" to="/tasks">过关任务列表</router-link>
+            <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">三分钟自评</router-link>
+            <router-link class="btn btn-ghost btn-sm" to="/booking">预约私人辅导</router-link>
             <router-link class="btn btn-ghost btn-sm" to="/wellbeing">记一笔打卡</router-link>
           </div>
           <div class="row" style="margin-top: 12px">

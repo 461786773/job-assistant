@@ -1,8 +1,8 @@
 <template>
   <section class="auth-page">
     <div class="auth-card">
-      <h1>输入用户名</h1>
-      <p class="muted">初期版本无需密码。输入用户名进入教练工作台；不同用户名数据隔离。</p>
+      <h1>链接进入</h1>
+      <p class="muted">输入用户名进入应用（受控访问）。新用户将先完成心理评测与诉求确认。</p>
       <form class="form" @submit.prevent="submit">
         <label>
           用户名
@@ -15,7 +15,7 @@
         </label>
         <p v-if="error" class="error">{{ error }}</p>
         <button class="btn btn-primary" type="submit" :disabled="busy">
-          {{ busy ? '进入中…' : '进入教练工作台' }}
+          {{ busy ? '进入中…' : '进入' }}
         </button>
       </form>
     </div>
@@ -25,8 +25,9 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api'
+import { api, postLoginPath } from '../api'
 import { setSession } from '../auth'
+import { clearProfileCache } from '../router'
 
 const router = useRouter()
 const route = useRoute()
@@ -42,8 +43,14 @@ async function submit() {
       username: form.username.trim() || 'default',
     })
     setSession(data.token, data.user)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/home'
-    router.replace(redirect || '/home')
+    clearProfileCache()
+    const me = await api.me()
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    if (redirect && me.hasInitialAssessment && me.primaryNeed) {
+      router.replace(redirect)
+      return
+    }
+    router.replace(postLoginPath(me))
   } catch (e) {
     error.value = e.message
   } finally {

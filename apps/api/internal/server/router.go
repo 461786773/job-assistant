@@ -36,6 +36,18 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 	r.Group(func(r chi.Router) {
 		r.Use(bearerAuth(tokens))
 		r.Get("/api/auth/me", h.Me)
+		r.Post("/api/needs/", h.SetPrimaryNeed)
+		r.Route("/api/assessments", func(r chi.Router) {
+			r.Get("/", h.ListAssessments)
+			r.Post("/", h.CreateAssessment)
+			r.Get("/latest", h.LatestAssessment)
+			r.Get("/{id}", h.GetAssessment)
+		})
+		r.Route("/api/counseling/bookings", func(r chi.Router) {
+			r.Get("/", h.ListBookings)
+			r.Post("/", h.CreateBooking)
+			r.Patch("/{id}", h.PatchBooking)
+		})
 		r.Route("/api/tasks", func(r chi.Router) {
 			r.Get("/", h.ListTasks)
 			r.Post("/", h.CreateTask)
@@ -61,6 +73,12 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 			r.Get("/", h.ListCheckIns)
 			r.Post("/", h.CreateCheckIn)
 			r.Delete("/{id}", h.DeleteCheckIn)
+		})
+		r.Route("/api/wellbeing/quick-checks", func(r chi.Router) {
+			r.Get("/", h.ListQuickSelfChecks)
+			r.Post("/", h.CreateQuickSelfCheck)
+			r.Get("/{id}", h.GetQuickSelfCheck)
+			r.Delete("/{id}", h.DeleteQuickSelfCheck)
 		})
 	})
 
