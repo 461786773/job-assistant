@@ -50,6 +50,18 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 			r.Post("/{id}/salary/analyze", h.SalaryAnalyze)
 		})
 		r.Post("/api/resume/parse", h.ParseResume)
+		r.Route("/api/coach/sessions", func(r chi.Router) {
+			r.Get("/", h.ListCoachSessions)
+			r.Post("/", h.CreateCoachSession)
+			r.Get("/{id}", h.GetCoachSession)
+			r.Post("/{id}/reply", h.ReplyCoachSession)
+			r.Delete("/{id}", h.DeleteCoachSession)
+		})
+		r.Route("/api/wellbeing/checkins", func(r chi.Router) {
+			r.Get("/", h.ListCheckIns)
+			r.Post("/", h.CreateCheckIn)
+			r.Delete("/{id}", h.DeleteCheckIn)
+		})
 	})
 
 	// Serve SPA if dist exists

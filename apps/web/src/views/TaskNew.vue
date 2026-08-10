@@ -50,7 +50,7 @@
         <button class="btn btn-primary" type="submit" :disabled="saving">
           {{ saving ? '创建中…' : '创建任务' }}
         </button>
-        <router-link class="btn btn-ghost" to="/">返回</router-link>
+        <router-link class="btn btn-ghost" to="/tasks">返回</router-link>
       </div>
     </form>
   </section>

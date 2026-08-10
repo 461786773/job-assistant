@@ -34,9 +34,9 @@ async function request(path, options = {}) {
   const data = await res.json().catch(() => ({}))
   if (res.status === 401) {
     clearSession()
-    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+    if (!window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
       const redirect = encodeURIComponent(window.location.pathname + window.location.search)
-      window.location.assign(`/login?redirect=${redirect}`)
+      window.location.assign(`/?redirect=${redirect}`)
     }
     throw new Error(data.error || '请先登录')
   }
@@ -89,11 +89,45 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  listCoachSessions: () => request('/api/coach/sessions/'),
+  getCoachSession: (id) => request(`/api/coach/sessions/${id}`),
+  createCoachSession: (body) =>
+    request('/api/coach/sessions/', { method: 'POST', body: JSON.stringify(body) }),
+  replyCoachSession: (id, message) =>
+    request(`/api/coach/sessions/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
+  deleteCoachSession: (id) => request(`/api/coach/sessions/${id}`, { method: 'DELETE' }),
+  listCheckIns: () => request('/api/wellbeing/checkins/'),
+  createCheckIn: (body) =>
+    request('/api/wellbeing/checkins/', { method: 'POST', body: JSON.stringify(body) }),
+  deleteCheckIn: (id) => request(`/api/wellbeing/checkins/${id}`, { method: 'DELETE' }),
 }
 
 export const STATUS_LABEL = {
   draft: '草稿',
-  hr_done: '简历优化完成',
-  interview_done: '面试模拟完成',
-  salary_done: '薪资确认完成',
+  hr_done: '人事关完成',
+  interview_done: '业务关完成',
+  salary_done: '谈薪关完成',
 }
+
+export const SCENE_LABEL = {
+  job_search: '求职 / 跳槽',
+  promotion: '晋升 / 述职',
+  communication: '职场沟通 / 冲突',
+}
+
+export const EVENT_OPTIONS = [
+  { value: '', label: '无特定事件' },
+  { value: 'interview', label: '面试' },
+  { value: 'reject', label: '挂面' },
+  { value: 'salary_talk', label: '谈薪' },
+  { value: 'promotion_review', label: '晋升述职' },
+  { value: 'conflict', label: '冲突会' },
+  { value: 'other', label: '其他' },
+]
+
+export const MOOD_OPTIONS = ['平静', '焦虑', '低落', '烦躁', '兴奋', '耗竭', '羞耻']
+
+export const CRISIS_HELP = `如果你正在经历强烈的自我伤害念头，或担心可能伤害他人，请立刻寻求专业或紧急帮助（如 120 / 当地心理援助热线），并联系身边可信的人。本产品是职场心理教练，不能替代持证心理咨询或精神科诊疗。`

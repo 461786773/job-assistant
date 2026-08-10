@@ -1,26 +1,23 @@
 <template>
   <section class="auth-page">
     <div class="auth-card">
-      <h1>登录</h1>
-      <p class="muted">登录后只能看到自己的求职任务。</p>
+      <h1>输入用户名</h1>
+      <p class="muted">初期版本无需密码。输入用户名进入教练工作台；不同用户名数据隔离。</p>
       <form class="form" @submit.prevent="submit">
         <label>
           用户名
-          <input v-model="form.username" autocomplete="username" placeholder="字母/数字/下划线" required />
-        </label>
-        <label>
-          密码
-          <input v-model="form.password" type="password" autocomplete="current-password" required />
+          <input
+            v-model="form.username"
+            autocomplete="username"
+            placeholder="默认 default"
+            required
+          />
         </label>
         <p v-if="error" class="error">{{ error }}</p>
         <button class="btn btn-primary" type="submit" :disabled="busy">
-          {{ busy ? '登录中…' : '登录' }}
+          {{ busy ? '进入中…' : '进入教练工作台' }}
         </button>
       </form>
-      <p class="auth-switch muted">
-        还没有账号？
-        <router-link :to="{ path: '/register', query: $route.query }">注册</router-link>
-      </p>
     </div>
   </section>
 </template>
@@ -35,19 +32,18 @@ const router = useRouter()
 const route = useRoute()
 const busy = ref(false)
 const error = ref('')
-const form = reactive({ username: '', password: '' })
+const form = reactive({ username: 'default' })
 
 async function submit() {
   error.value = ''
   busy.value = true
   try {
     const data = await api.login({
-      username: form.username.trim(),
-      password: form.password,
+      username: form.username.trim() || 'default',
     })
     setSession(data.token, data.user)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    router.replace(redirect || '/')
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/home'
+    router.replace(redirect || '/home')
   } catch (e) {
     error.value = e.message
   } finally {

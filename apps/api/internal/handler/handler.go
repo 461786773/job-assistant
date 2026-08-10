@@ -55,6 +55,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
 		"service": "job-assistant",
+		"role":    "workplace-coach",
 		"llm":     h.LLM != nil && h.LLM.Enabled(),
 	})
 }

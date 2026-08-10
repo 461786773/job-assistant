@@ -97,15 +97,17 @@ func TestUserCRUD(t *testing.T) {
 	}
 	defer store.Close()
 
-	u := &User{ID: "u1", Username: "alice", PasswordHash: "hash", CreatedAt: Now()}
-	if err := store.CreateUser(u); err != nil {
-		t.Fatalf("create: %v", err)
+	def, err := store.GetUserByUsername(DefaultUsername)
+	if err != nil || def == nil || def.ID != DefaultUserID {
+		t.Fatalf("default user missing: %v %#v", err, def)
 	}
-	if err := store.CreateUser(u); err == nil {
-		t.Fatal("expected duplicate username error")
+
+	u, err := store.EnsureUser("alice")
+	if err != nil || u == nil || u.Username != "alice" {
+		t.Fatalf("ensure: %v %#v", err, u)
 	}
-	got, err := store.GetUserByUsername("alice")
-	if err != nil || got == nil || got.ID != "u1" {
-		t.Fatalf("get by username: %v %#v", err, got)
+	again, err := store.EnsureUser("alice")
+	if err != nil || again == nil || again.ID != u.ID {
+		t.Fatalf("ensure idempotent: %v %#v", err, again)
 	}
 }

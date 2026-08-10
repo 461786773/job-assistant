@@ -3,14 +3,17 @@ import { reactive } from 'vue'
 const TOKEN_KEY = 'ja_token'
 const USER_KEY = 'ja_user'
 
+// 用 sessionStorage：关闭浏览器后再开会回到登录页
+const storage = sessionStorage
+
 const state = reactive({
-  token: localStorage.getItem(TOKEN_KEY) || '',
+  token: storage.getItem(TOKEN_KEY) || '',
   user: readUser(),
 })
 
 function readUser() {
   try {
-    const raw = localStorage.getItem(USER_KEY)
+    const raw = storage.getItem(USER_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -28,13 +31,18 @@ export function getUser() {
 export function setSession(token, user) {
   state.token = token || ''
   state.user = user || null
-  localStorage.setItem(TOKEN_KEY, state.token)
-  localStorage.setItem(USER_KEY, JSON.stringify(state.user))
+  storage.setItem(TOKEN_KEY, state.token)
+  storage.setItem(USER_KEY, JSON.stringify(state.user))
+  // 清掉旧的 localStorage，避免误用历史登录态
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
 }
 
 export function clearSession() {
   state.token = ''
   state.user = null
+  storage.removeItem(TOKEN_KEY)
+  storage.removeItem(USER_KEY)
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }

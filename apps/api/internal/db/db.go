@@ -98,7 +98,6 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 `
 	if _, err := s.db.Exec(schema); err != nil {
@@ -106,6 +105,15 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 	}
 	if err := s.ensureColumn("tasks", "user_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)`); err != nil {
+		return fmt.Errorf("migrate index: %w", err)
+	}
+	if err := s.seedDefaultUser(); err != nil {
+		return fmt.Errorf("seed default user: %w", err)
+	}
+	if err := s.migrateCoachWellbeing(); err != nil {
+		return fmt.Errorf("migrate coach/wellbeing: %w", err)
 	}
 	return nil
 }

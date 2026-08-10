@@ -9,32 +9,39 @@
           {{ [task.company, task.targetRole].filter(Boolean).join(' · ') || '未填公司/岗位' }}
           · {{ STATUS_LABEL[task.status] || task.status }}
         </p>
+        <div class="row" style="margin-top: 10px">
+          <button class="btn btn-ghost btn-sm" type="button" :disabled="coachStarting" @click="openCoach">
+            {{ coachStarting ? '创建中…' : '就这个任务找教练聊聊' }}
+          </button>
+          <router-link class="btn btn-ghost btn-sm" to="/tasks">返回过关列表</router-link>
+        </div>
+        <p v-if="coachError" class="error">{{ coachError }}</p>
       </div>
 
       <div class="gates">
         <button type="button" class="gate" :class="{ active: activeGate === 'hr' }" @click="activeGate = 'hr'">
-          <h4>① 简历优化</h4>
+          <h4>① 人事关</h4>
           <p v-if="hrReport">总分 {{ hrReport.totalScore }} · 点击查看</p>
           <p v-else>评分 / 硬伤 / 改写清单</p>
         </button>
         <button type="button" class="gate" :class="{ active: activeGate === 'interview' }" @click="goInterview">
-          <h4>② 面试模拟</h4>
+          <h4>② 业务关</h4>
           <p v-if="interview?.status === 'done'">深度分 {{ interview.diagnosis?.depthScore ?? '—' }} · 点击查看</p>
           <p v-else-if="interview?.messages?.length">进行中 · 第 {{ interview.round }}/{{ interview.maxRounds }} 轮</p>
           <p v-else>模拟深挖与反表层化</p>
         </button>
         <button type="button" class="gate" :class="{ active: activeGate === 'salary' }" @click="activeGate = 'salary'">
-          <h4>③ 薪资确认</h4>
+          <h4>③ 谈薪关</h4>
           <p v-if="salary?.analysis">已生成对照 · 点击查看</p>
           <p v-else>结构对照与话术</p>
         </button>
       </div>
 
-      <!-- 简历优化：左报告 / 中改写 / 右简历 -->
+      <!-- 人事关：左报告 / 中改写 / 右简历 -->
       <div v-show="activeGate === 'hr'" class="hr-workspace">
         <div class="workspace-toolbar">
           <div>
-            <h2 class="section-title" style="margin: 0">简历优化</h2>
+            <h2 class="section-title" style="margin: 0">人事关</h2>
             <p class="muted" style="margin: 4px 0 0">左报告 · 中改写 · 右简历详情</p>
           </div>
           <div class="row">
@@ -42,7 +49,7 @@
               {{ analyzing ? '分析中…' : hrReport ? '重新分析' : '生成简历评分' }}
             </button>
             <button v-if="hrReport" class="btn btn-primary" type="button" @click="goInterview">
-              进入面试模拟 →
+              进入业务关 →
             </button>
           </div>
         </div>
@@ -196,18 +203,18 @@
               <p v-if="saveMsg" :class="['pane-meta', saveOk ? 'success' : 'error']">{{ saveMsg }}</p>
               <div class="row pane-meta">
                 <button class="btn btn-danger btn-sm" type="button" :disabled="saving" @click="remove">删除任务</button>
-                <router-link class="btn btn-ghost btn-sm" to="/">返回工作台</router-link>
+                <router-link class="btn btn-ghost btn-sm" to="/tasks">返回过关列表</router-link>
               </div>
             </div>
           </section>
         </div>
       </div>
 
-      <!-- 面试模拟 -->
+      <!-- 业务关 -->
       <div v-show="activeGate === 'interview'" class="panel form" style="margin-bottom: 16px">
         <div class="row" style="justify-content: space-between">
           <div>
-            <h2 class="section-title">面试模拟</h2>
+            <h2 class="section-title">业务关</h2>
             <p class="muted" style="margin: 0">业务面试官追问；结束后给出反表层化诊断与补强稿。</p>
           </div>
           <button class="btn btn-primary" type="button" :disabled="interviewBusy" @click="startInterview">
@@ -242,13 +249,13 @@
         </form>
 
         <div v-if="interview?.status === 'done'" class="row" style="margin-top: 14px">
-          <button class="btn btn-primary" type="button" @click="activeGate = 'salary'">进入薪资确认 →</button>
+          <button class="btn btn-primary" type="button" @click="activeGate = 'salary'">进入谈薪关 →</button>
         </div>
       </div>
 
-      <!-- 薪资确认 -->
+      <!-- 谈薪关 -->
       <div v-show="activeGate === 'salary'" class="panel salary-panel" style="margin-bottom: 16px">
-        <h2 class="section-title">薪资确认</h2>
+        <h2 class="section-title">谈薪关</h2>
         <p class="muted salary-lead">填写当前薪酬与 Offer 结构，生成年包对照、避坑点与话术。</p>
 
         <div class="salary-cols">
@@ -358,6 +365,8 @@ const answer = ref('')
 
 const salaryBusy = ref(false)
 const salaryError = ref('')
+const coachStarting = ref(false)
+const coachError = ref('')
 const salaryForm = reactive({
   current: emptyComp(),
   offer: emptyComp(),
@@ -615,12 +624,29 @@ async function runSalary() {
   }
 }
 
+async function openCoach() {
+  coachError.value = ''
+  coachStarting.value = true
+  try {
+    const sess = await api.createCoachSession({
+      scene: 'job_search',
+      relatedTaskId: props.id,
+      relatedEvent: '求职任务复盘',
+    })
+    router.push(`/coach/${sess.id}`)
+  } catch (e) {
+    coachError.value = e.message
+  } finally {
+    coachStarting.value = false
+  }
+}
+
 async function remove() {
   if (!confirm('确认删除该任务？')) return
   saving.value = true
   try {
     await api.deleteTask(props.id)
-    router.push('/')
+    router.push('/tasks')
   } catch (e) {
     saveOk.value = false
     saveMsg.value = e.message

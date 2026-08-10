@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/zhangyongjie/job-assistant/internal/auth"
 	"github.com/zhangyongjie/job-assistant/internal/db"
@@ -13,48 +12,36 @@ import (
 
 var usernameRE = regexp.MustCompile(`^[a-zA-Z0-9_]{2,32}$`)
 
-type registerBody struct {
+type enterBody struct {
 	Username string `json:"username"`
-	Password string `json:"password"`
 }
 
-type loginBody struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+// Login 初期版本：仅用户名，无密码。不存在则自动创建。
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	h.enterAs(w, r, http.StatusOK)
 }
 
+// Register 与 Login 相同（兼容旧前端）。
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var body registerBody
+	h.enterAs(w, r, http.StatusCreated)
+}
+
+func (h *Handler) enterAs(w http.ResponseWriter, r *http.Request, status int) {
+	var body enterBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, "无效的 JSON")
 		return
 	}
 	username := strings.TrimSpace(body.Username)
-	password := body.Password
+	if username == "" {
+		username = db.DefaultUsername
+	}
 	if !usernameRE.MatchString(username) {
 		writeErr(w, http.StatusBadRequest, "用户名需 2–32 位字母、数字或下划线")
 		return
 	}
-	if utf8.RuneCountInString(password) < 6 {
-		writeErr(w, http.StatusBadRequest, "密码至少 6 位")
-		return
-	}
-	hash, err := auth.HashPassword(password)
+	user, err := h.Store.EnsureUser(username)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "无法创建账号")
-		return
-	}
-	user := &db.User{
-		ID:           newID(),
-		Username:     username,
-		PasswordHash: hash,
-		CreatedAt:    db.Now(),
-	}
-	if err := h.Store.CreateUser(user); err != nil {
-		if strings.Contains(err.Error(), "用户名已存在") {
-			writeErr(w, http.StatusConflict, err.Error())
-			return
-		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -63,37 +50,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "签发令牌失败")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"token": token,
-		"user": map[string]any{
-			"id":       user.ID,
-			"username": user.Username,
-		},
-	})
-}
-
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var body loginBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeErr(w, http.StatusBadRequest, "无效的 JSON")
-		return
-	}
-	username := strings.TrimSpace(body.Username)
-	user, err := h.Store.GetUserByUsername(username)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if user == nil || !auth.CheckPassword(user.PasswordHash, body.Password) {
-		writeErr(w, http.StatusUnauthorized, "用户名或密码错误")
-		return
-	}
-	token, err := h.Tokens.Issue(user.ID, user.Username)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "签发令牌失败")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, status, map[string]any{
 		"token": token,
 		"user": map[string]any{
 			"id":       user.ID,

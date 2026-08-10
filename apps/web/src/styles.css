@@ -343,6 +343,7 @@ a {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
+  align-items: center;
   padding: 18px 20px;
   border-radius: 16px;
   border: 1px solid var(--line);
@@ -355,9 +356,26 @@ a {
   transform: translateY(-1px);
 }
 
+.task-card-main {
+  display: block;
+  min-width: 0;
+  color: inherit;
+}
+
+.task-card-main:hover h3 {
+  color: var(--accent);
+}
+
 .task-card h3 {
   margin: 0 0 6px;
   font-size: 1.1rem;
+}
+
+.task-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
 .meta {
@@ -816,4 +834,173 @@ textarea {
   color: var(--accent);
   font-weight: 600;
 }
+
+.coach-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat-row {
+  display: flex;
+  gap: 28px;
+  margin-top: 8px;
+}
+
+.stat-num {
+  font-family: var(--display);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.scene-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.scene-card {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  color: inherit;
+  font: inherit;
+}
+
+.scene-card:hover {
+  border-color: rgba(15, 110, 86, 0.4);
+}
+
+.scene-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.coach-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+
+.chat-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 520px;
+  overflow: auto;
+  margin-bottom: 14px;
+}
+
+.chat-bubble {
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  background: rgba(15, 110, 86, 0.08);
+}
+
+.chat-bubble.coach {
+  align-self: flex-start;
+}
+
+.chat-role {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.chat-content {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.chat-input textarea {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.side-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.crisis-banner {
+  background: rgba(154, 52, 18, 0.08);
+  border: 1px solid rgba(154, 52, 18, 0.25);
+  color: var(--warn);
+  padding: 14px 16px;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.tag-fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.tag-fieldset legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.tag-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 10px 4px 0;
+  font-weight: 500;
+}
+
+.checkin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.checkin-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .coach-home-grid,
+  .coach-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 
