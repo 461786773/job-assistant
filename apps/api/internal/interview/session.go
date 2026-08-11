@@ -192,9 +192,12 @@ func heuristicReply(sess *Session, answer string, finish bool) *Session {
 		return sess
 	}
 	q := "再展开一点：这件事里你个人拍板或推动的关键一步是什么？有没有备选方案被你否掉？"
+	feedback := "方向听得见，但还偏口号。接下来请落到数字、取舍和你本人做了什么。"
 	if shallow {
 		q = "你的回答信息偏少。请用一个具体例子：当时有哪些选项、你选了哪个、为什么、结果如何？"
+		feedback = "信息偏少。好的地方是愿意开口；弱在缺具体场景与个人贡献，需要补细节。"
 	}
+	sess.Messages = append(sess.Messages, ChatMsg{Role: "coach", Content: feedback})
 	sess.Messages = append(sess.Messages, ChatMsg{Role: "interviewer", Content: q})
 	sess.Round++
 	return sess

@@ -2,10 +2,21 @@
   <section>
     <div class="hero">
       <h1>想被更深地接住时</h1>
-      <p>大约几分钟的心里盘点。不是诊断，答案只有你自己看得见。轻松聊聊时可以不做。</p>
+      <p>
+        {{
+          fromQuick
+            ? '刚才看的是此刻。下面是心理评估：再花几分钟说说近况和期望；不是诊断，答案只有你自己看得见。'
+            : '这是心理评估，大约几分钟的心里盘点。不是诊断，答案只有你自己看得见。轻松聊聊时可以不做。'
+        }}
+      </p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
+
+    <div v-if="quickStrip" class="panel" style="margin-bottom: 12px">
+      <div class="muted">刚才你留下的此刻</div>
+      <p style="margin: 6px 0 0">{{ quickStrip }}</p>
+    </div>
 
     <div class="panel" style="margin-bottom: 12px">
       <div class="muted">进度 {{ step }}/{{ totalSteps }}</div>
@@ -19,7 +30,12 @@
           <legend>知情同意</legend>
           <label class="option-row">
             <input v-model="form.consent" type="checkbox" required />
-            <span>我已知晓：本问卷为职场自我评估，非临床诊断；用于教练个性化与趋势对照，不作录用/晋升评判。</span>
+            <span v-if="fromQuick">
+              我已知晓：本卷为职场自我评估（非临床诊断），用于教练个性化；与刚才留下的此刻一并使用，不作录用/晋升评判。
+            </span>
+            <span v-else>
+              我已知晓：本问卷为职场自我评估，非临床诊断；用于教练个性化与趋势对照，不作录用/晋升评判。
+            </span>
           </label>
         </fieldset>
         <fieldset class="tag-fieldset">
@@ -202,7 +218,7 @@
       <div class="row" style="flex-wrap: wrap; gap: 10px">
         <button v-if="step > 1" class="btn btn-ghost" type="button" @click="step -= 1">上一步</button>
         <button class="btn btn-primary" type="submit" :disabled="busy">
-          {{ busy ? '提交中…' : step < totalSteps ? '下一步' : '提交并生成分析' }}
+          {{ busy ? '我在看…' : step < totalSteps ? '下一步' : '好，看看我的摘要' }}
         </button>
         <button class="btn btn-ghost" type="button" @click="skipForLater">先去别处转转</button>
       </div>
@@ -211,16 +227,21 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { api } from '../api'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { api, FEELING_OPTIONS } from '../api'
 import { clearProfileCache } from '../router'
 
 const router = useRouter()
+const route = useRoute()
 const step = ref(1)
 const totalSteps = 5
 const busy = ref(false)
 const error = ref('')
+const quickStrip = ref('')
+
+const fromQuick = computed(() => route.query.from === 'quick')
+const quickId = computed(() => (typeof route.query.quickId === 'string' ? route.query.quickId : ''))
 
 const form = reactive({
   consent: false,
@@ -351,4 +372,23 @@ async function onNext() {
 function skipForLater() {
   router.push('/home')
 }
+
+onMounted(async () => {
+  if (!quickId.value) return
+  try {
+    const q = await api.getQuickSelfCheck(quickId.value)
+    if (!q) return
+    const feels = (q.feelings || [])
+      .map((v) => FEELING_OPTIONS.find((o) => o.value === v)?.label || v)
+      .filter(Boolean)
+      .join('、')
+    const bits = []
+    if (feels) bits.push(`感觉：${feels}`)
+    if (q.distressScore) bits.push(`困扰 ${q.distressScore}/10`)
+    if (q.triggerNote) bits.push(q.triggerNote)
+    quickStrip.value = bits.join(' · ')
+  } catch {
+    quickStrip.value = ''
+  }
+})
 </script>

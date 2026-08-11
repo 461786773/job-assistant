@@ -109,6 +109,20 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		bigFiveID = bf.ID
 		bigFiveTitle = bf.PersonaTitle
 	}
+	hasQuickSnapshot := false
+	// §0.5-B / §11 #11：推荐合读画像 + 基线·最新 + 快照·最新
+	if q, _ := h.Store.LatestQuickSelfCheck(claims.UserID); q != nil {
+		hasQuickSnapshot = true
+		// 无基线时，困扰偏高则优先建议先把心安下来
+		if !hasAssessment && q.DistressScore >= 7 && suggestedNeed == "" {
+			suggestedNeed = "counsel_first"
+		}
+		// 有基线但快照显示此刻很难受，且推荐偏「做事」时，轻轻改向疏导
+		if hasAssessment && q.DistressScore >= 8 &&
+			(suggestedNeed == "job_search" || suggestedNeed == "promotion") {
+			suggestedNeed = "counsel_first"
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":                   user.ID,
 		"username":             user.Username,
@@ -121,6 +135,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"hasBigFiveProfile":    hasBigFive,
 		"latestBigFiveId":      bigFiveID,
 		"bigFivePersonaTitle":  bigFiveTitle,
+		"hasQuickSnapshot":     hasQuickSnapshot,
 	})
 }
 

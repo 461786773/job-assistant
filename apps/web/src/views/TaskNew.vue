@@ -58,10 +58,11 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 const saving = ref(false)
 const error = ref('')
 const parseError = ref('')
@@ -77,6 +78,11 @@ const form = reactive({
 })
 
 let pendingFile = null
+
+function gateQuery() {
+  const g = typeof route.query.gate === 'string' ? route.query.gate : ''
+  return g === 'hr' || g === 'interview' || g === 'salary' ? { gate: g } : {}
+}
 
 async function onFile(e) {
   const file = e.target.files?.[0]
@@ -115,7 +121,7 @@ async function submit() {
         console.warn('resume re-upload skipped:', uploadErr)
       }
     }
-    router.push(`/tasks/${task.id}`)
+    router.push({ path: `/tasks/${task.id}`, query: gateQuery() })
   } catch (e) {
     error.value = e.message
   } finally {

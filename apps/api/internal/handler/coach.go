@@ -21,7 +21,15 @@ type createCoachBody struct {
 	SkipQuickGate       bool   `json:"skipQuickGate"`
 }
 
-const quickGateHours = 24
+func startOfLocalDay(now time.Time) time.Time {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		loc = time.Local
+	}
+	t := now.In(loc)
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+}
 
 func (h *Handler) ListCoachSessions(w http.ResponseWriter, r *http.Request) {
 	claims := requireUser(w, r)
@@ -111,21 +119,21 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if item == nil {
-			writeErr(w, http.StatusBadRequest, "关联自评不存在")
+			writeErr(w, http.StatusBadRequest, "关联的自评不存在")
 			return
 		}
 		quick = item
 		quickHint = coach.FormatQuickCheck(item)
 	} else if mode == "formal" {
-		// 正式疏导：近 24h 内建议有三分钟自评
-		recent, err := h.Store.LatestQuickSelfCheckSince(claims.UserID, time.Now().UTC().Add(-quickGateHours*time.Hour))
+		// 认真聊：当日已有快照可沿用（日历日，非滚动 24h）
+		recent, err := h.Store.LatestQuickSelfCheckSince(claims.UserID, startOfLocalDay(time.Now()))
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		if recent == nil {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":    "正式疏导建议先完成三分钟自评",
+				"error":    "认真聊之前，想先邀你花三分钟看看自己",
 				"code":     "quick_check_required",
 				"redirect": "/wellbeing/quick",
 			})
@@ -134,8 +142,14 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		quick = recent
 		quickID = recent.ID
 		quickHint = coach.FormatQuickCheck(recent)
+	} else if mode == "trial" {
+		// 轻松聊：无门禁，但有快照则注入最新（§0.8）
+		if latestQuick, _ := h.Store.LatestQuickSelfCheck(claims.UserID); latestQuick != nil {
+			quick = latestQuick
+			quickID = latestQuick.ID
+			quickHint = coach.FormatQuickCheck(latestQuick)
+		}
 	}
-	// trial：可不做短问卷，直接开聊
 
 	assessmentHint := ""
 	bigFiveHint := ""
@@ -163,7 +177,7 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 	sess.UserID = claims.UserID
 	sess.RelatedTaskID = relatedTaskID
 	if mode == "trial" {
-		sess.Title = coach.SceneLabel(scene) + " · 轻试疏导"
+		sess.Title = coach.SceneLabel(scene) + " · 轻松聊聊"
 	}
 	sess.CreatedAt = now
 	sess.UpdatedAt = now
@@ -171,7 +185,7 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if quick != nil && quick.RelatedCoachSessionID == "" {
+	if quick != nil && quick.RelatedCoachSessionID == "" && mode == "formal" {
 		quick.RelatedCoachSessionID = sess.ID
 		_ = h.Store.UpdateQuickSelfCheck(quick)
 	}
@@ -221,8 +235,11 @@ func (h *Handler) ReplyCoachSession(w http.ResponseWriter, r *http.Request) {
 			bigFiveHint = bf.SummaryForCoach
 		}
 	}
-	if recent, _ := h.Store.LatestQuickSelfCheckSince(claims.UserID, time.Now().UTC().Add(-quickGateHours*time.Hour)); recent != nil {
-		quickHint = coach.FormatQuickCheck(recent)
+	// §0.8：本会话关联快照优先，否则取最新快照
+	if linked, _ := h.Store.QuickSelfCheckByCoachSession(claims.UserID, sess.ID); linked != nil {
+		quickHint = coach.FormatQuickCheck(linked)
+	} else if latestQuick, _ := h.Store.LatestQuickSelfCheck(claims.UserID); latestQuick != nil {
+		quickHint = coach.FormatQuickCheck(latestQuick)
 	}
 	profileCtx := coach.MergeUserProfile(bigFiveHint, assessmentHint, quickHint)
 

@@ -5,8 +5,18 @@
       <p>点一句就好，我会直接带你去聊。说不清也没关系。</p>
     </div>
 
-    <p v-if="hint" class="muted">评测里，我更偏向陪你从「{{ NEED_LABEL[hint] || hint }}」聊起。</p>
-    <p v-else-if="!hasAssessment" class="muted">还没有做过详细评估也没关系，先选一句最贴的即可。</p>
+    <p v-if="hint" class="muted">
+      结合你留下的评估与此刻，我更偏向陪你从「{{ NEED_LABEL[hint] || hint }}」聊起。
+    </p>
+    <p v-else-if="!hasAssessment && !hasBigFive && !hasQuick" class="muted">
+      还没有画像或评估也没关系，先选一句最贴的即可；之后补上，我会更贴你一点。
+    </p>
+    <p v-else-if="!hasAssessment" class="muted">
+      还没有心理评估也没关系。之后补上，我会更贴你一点。
+    </p>
+    <p v-else-if="!hasBigFive" class="muted">
+      还没有职场画像也没关系。补测后，接话会更贴你的风格。
+    </p>
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="scene-grid" style="margin-top: 14px">
@@ -43,11 +53,13 @@ const router = useRouter()
 const selected = ref('')
 const hint = ref('')
 const hasAssessment = ref(false)
+const hasBigFive = ref(false)
+const hasQuick = ref(false)
 const busy = ref(false)
 const error = ref('')
 
 const primaryCta = computed(() => {
-  if (selected.value === 'unsure') return '好，回工作台慢慢找'
+  if (selected.value === 'unsure') return '好，回此刻慢慢找'
   if (selected.value === 'counsel_first') return '好，先把心安下来'
   return '好，开始聊'
 })
@@ -101,6 +113,8 @@ onMounted(async () => {
   try {
     const me = await api.me()
     hasAssessment.value = Boolean(me.hasInitialAssessment)
+    hasBigFive.value = Boolean(me.hasBigFiveProfile)
+    hasQuick.value = Boolean(me.hasQuickSnapshot)
     hint.value = me.suggestedNeed || ''
     selected.value = me.primaryNeed || me.suggestedNeed || ''
   } catch (e) {

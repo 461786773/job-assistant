@@ -26,22 +26,22 @@ func SceneLabel(scene string) string {
 	return scene
 }
 
-// MergeUserProfile 把职场画像、初次评估、三分钟自评合成一段「合读」上下文。
+// MergeUserProfile 把职场画像、心理评估（基线）、快照合成一段「合读」上下文。
 func MergeUserProfile(bigFiveHint, assessmentHint, quickHint string) string {
 	var parts []string
 	if s := strings.TrimSpace(bigFiveHint); s != "" {
 		parts = append(parts, "【职场风格画像·较稳定】\n"+s)
 	}
 	if s := strings.TrimSpace(assessmentHint); s != "" {
-		parts = append(parts, "【初次评估详情·近期基线】\n"+s)
+		parts = append(parts, "【心理评估·基线·最新】\n"+s)
 	}
 	if s := strings.TrimSpace(quickHint); s != "" {
-		parts = append(parts, "【此刻三分钟自评】\n"+s)
+		parts = append(parts, "【快照·此刻状态】\n"+s)
 	}
 	if len(parts) == 0 {
 		return ""
 	}
-	return strings.Join(parts, "\n\n") + "\n\n合读说明：画像看协作与压力习惯，评估看近两周压力与卡住点，自评看此刻状态。三者描述同一个人，须合在一起用；禁止诊断病名，禁止只引用其中一块。"
+	return strings.Join(parts, "\n\n") + "\n\n合读说明：画像看协作与压力习惯，心理评估（基线）看近两周压力与卡住点，快照看此刻状态。三者描述同一个人，须合在一起用；禁止诊断病名，禁止只引用其中一块。"
 }
 
 func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed string) (*db.CoachSession, error) {

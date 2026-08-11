@@ -8,7 +8,7 @@
 
     <p v-if="error" class="error">{{ error }}</p>
 
-    <!-- 画像置顶；详细评估软邀请（不挡聊天） -->
+    <!-- 画像 + 心理评估（一体入口，基线禁止失踪） -->
     <section class="home-know reveal reveal-delay-1">
       <h2 class="home-know-title">先让我多懂你一点</h2>
       <div class="know-list">
@@ -32,13 +32,27 @@
             <router-link v-else to="/bigfive">测一下</router-link>
           </div>
         </div>
-        <div v-if="!profileLoading && profile && !profile.hasInitialAssessment" class="know-row">
+        <div class="know-row">
           <div class="know-row-main">
-            <strong>想让我更懂一点现在的你吗？</strong>
-            <span class="know-row-desc">大约几分钟；也可以稍后再说。不做，也能先聊。</span>
+            <strong>心理评估</strong>
+            <span class="know-row-desc">
+              <template v-if="profile?.hasInitialAssessment">
+                你已经有一份底了。若近况变了，可以重新评估一下。
+              </template>
+              <template v-else>
+                想让我更懂一点现在的你吗？大约几分钟；也可以稍后再说。不做，也能先聊。
+              </template>
+            </span>
           </div>
           <div class="know-row-actions">
-            <router-link to="/onboarding/assessment">好，我想被更好地理解</router-link>
+            <template v-if="profile?.hasInitialAssessment">
+              <router-link to="/onboarding/assessment">重新评估一下</router-link>
+            </template>
+            <template v-else>
+              <router-link to="/onboarding/assessment">好，我想被更好地理解</router-link>
+              <span class="muted">·</span>
+              <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>
+            </template>
           </div>
         </div>
       </div>
@@ -68,7 +82,18 @@
       <template v-if="coachMode === 'formal'">
         <div class="formal-gate">
           <template v-if="hasRecentQuick">
-            <p>近一天你已经看过自己一眼，点下面任意一句，我们就可以认真聊。</p>
+            <p>
+              今天你已经看过自己一眼了——点下面任意一句，我们可以接着聊；想换个说法再记一笔也可以。
+            </p>
+            <div class="formal-gate-actions">
+              <span class="muted">沿用今天的</span>
+              <router-link
+                class="formal-gate-cta"
+                :to="{ path: '/wellbeing/quick', query: { next: 'coach', mode: 'formal' } }"
+              >
+                再看一眼自己
+              </router-link>
+            </div>
           </template>
           <template v-else>
             <p>
@@ -123,17 +148,17 @@
     <section class="home-aside reveal reveal-delay-3">
       <p class="aside-status">
         <template v-if="summaryLoading">最近状态我看看…</template>
-        <template v-else-if="summary?.checkInCount7">
-          近一周你留下了 {{ summary.checkInCount7 }} 笔，压力大约 {{ formatAvg(summary.avgStress7) }}。
-          <router-link to="/wellbeing/quick">先记一笔</router-link>
+        <template v-else-if="snapshotSummary.count7">
+          近一周你留下了 {{ snapshotSummary.count7 }} 笔，心里大约 {{ formatAvg(snapshotSummary.avg7) }}/10。
+          <router-link to="/wellbeing/quick">再看一眼自己</router-link>
           <span class="dot">·</span>
-          <router-link to="/assessments">我的记录</router-link>
+          <router-link to="/assessments">我的评估</router-link>
         </template>
         <template v-else>
           最近还没有留下什么。
-          <router-link to="/wellbeing/quick">先记一笔</router-link>
+          <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>
           <span class="dot">·</span>
-          <router-link to="/assessments">我的记录</router-link>
+          <router-link to="/assessments">我的评估</router-link>
         </template>
       </p>
       <p class="aside-links">
@@ -176,11 +201,11 @@ const starting = ref(false)
 const coachMode = ref(route.query.mode === 'formal' ? 'formal' : 'trial')
 const sessions = ref([])
 const sessionsLoading = ref(true)
-const summary = ref(null)
 const summaryLoading = ref(true)
 const profile = ref(null)
 const profileLoading = ref(true)
 const hasRecentQuick = ref(false)
+const snapshotSummary = ref({ count7: 0, avg7: 0 })
 const focusTalk = ref(false)
 
 const talkOptions = computed(() => {
@@ -207,10 +232,13 @@ function formatAvg(v) {
 }
 
 function isRecentQuick(item) {
-  if (!item?.createdAt) return false
-  const t = Date.parse(item.createdAt)
+  const raw = item?.createdAt || item?.at
+  if (!raw) return false
+  const t = Date.parse(raw)
   if (Number.isNaN(t)) return false
-  return Date.now() - t < 24 * 60 * 60 * 1000
+  const a = new Date(t)
+  const b = new Date()
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
 async function startFromNeed(need) {
@@ -254,8 +282,19 @@ async function refreshQuickGate() {
     const quick = await api.listQuickSelfChecks()
     const items = quick.items || []
     hasRecentQuick.value = items.some(isRecentQuick)
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const weekItems = items.filter((q) => {
+      const t = Date.parse(q.createdAt || q.at || '')
+      return !Number.isNaN(t) && t >= weekAgo
+    })
+    const avg =
+      weekItems.length > 0
+        ? weekItems.reduce((s, q) => s + (Number(q.distressScore) || 0), 0) / weekItems.length
+        : 0
+    snapshotSummary.value = { count7: weekItems.length, avg7: avg }
   } catch {
     hasRecentQuick.value = false
+    snapshotSummary.value = { count7: 0, avg7: 0 }
   }
 }
 
@@ -273,15 +312,13 @@ watch(
 
 onMounted(async () => {
   try {
-    const [me, sessData, checkData] = await Promise.all([
+    const [me, sessData] = await Promise.all([
       api.me(),
       api.listCoachSessions(),
-      api.listCheckIns(),
       refreshQuickGate(),
     ])
     profile.value = me
     sessions.value = sessData.items || []
-    summary.value = checkData.summary || null
   } catch (e) {
     error.value = e.message
   } finally {

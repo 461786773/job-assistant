@@ -1,97 +1,79 @@
 <template>
   <section>
     <div class="hero">
-      <h1>心理健康跟踪</h1>
-      <p>轻量打卡与三分钟自评，看见状态与事件的关联。不做临床诊断，数据仅本人可见。</p>
+      <h1>这几天还好吗</h1>
+      <p>
+        这里是你留下的那些「此刻」连成的样子。想记一笔就
+        <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>。
+      </p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="coach-home-grid">
       <section class="panel">
-        <h2 class="section-title">今日打卡</h2>
-        <p class="muted" style="margin-bottom: 12px">
-          不到一分钟的压力/情绪记录；若想更完整地命名状态，可用
-          <router-link to="/wellbeing/quick">三分钟自评</router-link>。
-        </p>
-        <form class="form" @submit.prevent="submit">
-          <label>
-            压力分（1–10）
-            <input v-model.number="form.stressScore" type="number" min="1" max="10" required />
-          </label>
-          <label>
-            精力（可选，1–5）
-            <input v-model.number="form.energyScore" type="number" min="0" max="5" />
-          </label>
-          <fieldset class="tag-fieldset">
-            <legend>情绪标签</legend>
-            <label v-for="m in MOOD_OPTIONS" :key="m" class="tag-check">
-              <input v-model="form.moodTags" type="checkbox" :value="m" />
-              {{ m }}
-            </label>
-          </fieldset>
-          <label>
-            关联事件
-            <select v-model="form.eventType">
-              <option v-for="e in EVENT_OPTIONS" :key="e.value" :value="e.value">{{ e.label }}</option>
-            </select>
-          </label>
-          <label>
-            一句话备注
-            <textarea v-model="form.note" rows="2" placeholder="可选：今天触发点是什么" />
-          </label>
-          <div class="row" style="flex-wrap: wrap; gap: 8px">
-            <button class="btn btn-primary" type="submit" :disabled="busy">
-              {{ busy ? '保存中…' : '保存打卡' }}
-            </button>
-            <router-link class="btn btn-ghost" to="/wellbeing/quick">三分钟自评</router-link>
+        <h2 class="section-title">这几天的样子</h2>
+        <div class="stat-row">
+          <div>
+            <div class="stat-num">{{ formatAvg(summary.avg7) }}</div>
+            <div class="muted">近 7 日心里</div>
           </div>
-        </form>
+          <div>
+            <div class="stat-num">{{ formatAvg(summary.avg30) }}</div>
+            <div class="muted">近 30 日心里</div>
+          </div>
+          <div>
+            <div class="stat-num">{{ summary.count7 || '—' }}</div>
+            <div class="muted">近 7 日记下的</div>
+          </div>
+        </div>
+        <h3 class="pane-sub">偏沉的日子</h3>
+        <ul v-if="summary.highItems?.length" class="plain-list">
+          <li v-for="h in summary.highItems" :key="h.id">
+            {{ formatTime(h.at) }} · 心里 {{ h.distressScore }}/10
+            <span v-if="h.feelings?.length"> · {{ feelingLabels(h.feelings) }}</span>
+          </li>
+        </ul>
+        <p v-else class="muted">近段没有特别沉的记录。</p>
+        <p class="muted" style="margin-top: 12px">若一直很难受，请优先寻求专业支持；我这边是职场教练，不能替代诊疗。</p>
+        <div class="row" style="margin-top: 10px; flex-wrap: wrap; gap: 8px">
+          <router-link class="btn btn-primary" to="/wellbeing/quick">花三分钟看看自己</router-link>
+          <router-link class="btn btn-ghost" to="/home">去找教练聊聊</router-link>
+          <router-link class="btn btn-ghost" to="/assessments">我的评估</router-link>
+        </div>
       </section>
 
       <section class="panel">
-        <h2 class="section-title">趋势摘要</h2>
-        <div class="stat-row">
-          <div>
-            <div class="stat-num">{{ formatAvg(summary?.avgStress7) }}</div>
-            <div class="muted">近 7 日压力</div>
-          </div>
-          <div>
-            <div class="stat-num">{{ formatAvg(summary?.avgStress30) }}</div>
-            <div class="muted">近 30 日压力</div>
-          </div>
+        <h2 class="section-title">想被更好地接住时</h2>
+        <p class="muted">
+          三分钟是看看此刻；若愿意再多几分钟说说近况和期望，我会更懂你一些。
+        </p>
+        <div class="row" style="margin-top: 12px; flex-wrap: wrap; gap: 8px">
+          <router-link class="btn btn-primary" to="/onboarding/assessment">
+            {{ hasBaseline ? '重新评估一下' : '好，我想被更好地理解' }}
+          </router-link>
+          <router-link class="btn btn-ghost" to="/wellbeing/quick">花三分钟看看自己</router-link>
         </div>
-        <h3 class="pane-sub">高压日对照</h3>
-        <ul v-if="summary?.recentHighStress?.length" class="plain-list">
-          <li v-for="(h, i) in summary.recentHighStress" :key="i">
-            {{ formatTime(h.at) }} · 压力 {{ h.stress }}
-            <span v-if="h.eventType"> · {{ eventLabel(h.eventType) }}</span>
-            <span v-if="h.note"> — {{ h.note }}</span>
-          </li>
-        </ul>
-        <p v-else class="muted">暂无高压打卡记录。</p>
-        <p class="muted" style="margin-top: 12px">连续高压时，请优先寻求专业支持，而不是只依赖本产品。</p>
-        <router-link class="btn btn-ghost" to="/home" style="margin-top: 8px">去找教练聊聊</router-link>
       </section>
     </div>
 
     <section class="panel" style="margin-top: 16px">
       <div class="workspace-toolbar">
-        <h2 class="section-title" style="margin: 0">最近三分钟自评</h2>
-        <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">新填一份</router-link>
+        <h2 class="section-title" style="margin: 0">你留下的那些此刻</h2>
+        <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">再记一笔</router-link>
       </div>
-      <p v-if="quickLoading" class="muted">加载中…</p>
-      <p v-else-if="!quickItems.length" class="muted">还没有自评。会话开场或高压节点后可快速填一份。</p>
+      <p v-if="loading" class="muted">加载中…</p>
+      <p v-else-if="!items.length" class="muted">还没有留下什么。认真聊或主动看看自己时，会记下一笔。</p>
       <ul v-else class="checkin-list">
-        <li v-for="q in quickItems" :key="q.id">
+        <li v-for="q in items" :key="q.id">
           <div>
-            <strong>困扰 {{ q.distressScore }}/10</strong>
-            <span class="muted"> · {{ formatTime(q.at) }}</span>
+            <strong>心里 {{ q.distressScore }}/10</strong>
+            <span class="muted"> · {{ formatTime(q.at || q.createdAt) }}</span>
             <div class="meta">
               <span>{{ feelingLabels(q.feelings) }}</span>
               <span v-if="q.takeaway"> · {{ takeawayLabel(q.takeaway) }}</span>
               <span v-if="q.relatedCoachSessionId">
-                · <router-link :to="`/coach/${q.relatedCoachSessionId}`">关联会话</router-link>
+                · <router-link :to="`/coach/${q.relatedCoachSessionId}`">那天聊过的</router-link>
               </span>
             </div>
           </div>
@@ -99,53 +81,17 @@
         </li>
       </ul>
     </section>
-
-    <section class="panel" style="margin-top: 16px">
-      <h2 class="section-title">最近打卡</h2>
-      <p v-if="loading" class="muted">加载中…</p>
-      <p v-else-if="!items.length" class="muted">还没有记录。</p>
-      <ul v-else class="checkin-list">
-        <li v-for="c in items" :key="c.id">
-          <div>
-            <strong>压力 {{ c.stressScore }}</strong>
-            <span class="muted"> · {{ formatTime(c.at) }}</span>
-            <div class="meta">
-              <span v-if="c.moodTags?.length">{{ c.moodTags.join('、') }}</span>
-              <span v-if="c.eventType"> · {{ eventLabel(c.eventType) }}</span>
-              <span v-if="c.note"> · {{ c.note }}</span>
-            </div>
-          </div>
-          <button class="btn btn-ghost btn-sm" type="button" @click="remove(c.id)">删除</button>
-        </li>
-      </ul>
-    </section>
   </section>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
-import {
-  api,
-  EVENT_OPTIONS,
-  FEELING_OPTIONS,
-  MOOD_OPTIONS,
-  TAKEAWAY_OPTIONS,
-} from '../api'
+import { computed, onMounted, ref } from 'vue'
+import { api, FEELING_OPTIONS, TAKEAWAY_OPTIONS } from '../api'
 
 const loading = ref(true)
-const quickLoading = ref(true)
-const busy = ref(false)
 const error = ref('')
 const items = ref([])
-const quickItems = ref([])
-const summary = ref(null)
-const form = reactive({
-  stressScore: 5,
-  energyScore: 0,
-  moodTags: [],
-  eventType: '',
-  note: '',
-})
+const hasBaseline = ref(false)
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -157,12 +103,8 @@ function formatTime(iso) {
 }
 
 function formatAvg(v) {
-  if (!v) return '—'
+  if (v == null || v === 0) return '—'
   return Number(v).toFixed(1)
-}
-
-function eventLabel(v) {
-  return EVENT_OPTIONS.find((e) => e.value === v)?.label || v
 }
 
 function feelingLabels(values) {
@@ -175,56 +117,48 @@ function takeawayLabel(v) {
   return TAKEAWAY_OPTIONS.find((o) => o.value === v)?.label || v
 }
 
+const summary = computed(() => {
+  const list = items.value || []
+  const now = Date.now()
+  const inDays = (q, days) => {
+    const t = Date.parse(q.createdAt || q.at || '')
+    return !Number.isNaN(t) && t >= now - days * 24 * 60 * 60 * 1000
+  }
+  const week = list.filter((q) => inDays(q, 7))
+  const month = list.filter((q) => inDays(q, 30))
+  const avg = (arr) =>
+    arr.length ? arr.reduce((s, q) => s + (Number(q.distressScore) || 0), 0) / arr.length : 0
+  const highItems = month
+    .filter((q) => Number(q.distressScore) >= 8)
+    .slice(0, 8)
+    .map((q) => ({ ...q, at: q.createdAt || q.at }))
+  return {
+    count7: week.length,
+    avg7: avg(week),
+    avg30: avg(month),
+    highItems,
+  }
+})
+
 async function refresh() {
   loading.value = true
-  quickLoading.value = true
   error.value = ''
   try {
-    const [data, quick] = await Promise.all([api.listCheckIns(), api.listQuickSelfChecks()])
-    items.value = data.items || []
-    summary.value = data.summary || null
-    quickItems.value = quick.items || []
+    const [quick, me] = await Promise.all([
+      api.listQuickSelfChecks(),
+      api.me().catch(() => null),
+    ])
+    items.value = quick.items || []
+    hasBaseline.value = Boolean(me?.hasInitialAssessment)
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
-    quickLoading.value = false
-  }
-}
-
-async function submit() {
-  busy.value = true
-  error.value = ''
-  try {
-    await api.createCheckIn({
-      stressScore: form.stressScore,
-      energyScore: form.energyScore || 0,
-      moodTags: form.moodTags,
-      eventType: form.eventType,
-      note: form.note,
-    })
-    form.note = ''
-    form.moodTags = []
-    await refresh()
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    busy.value = false
-  }
-}
-
-async function remove(id) {
-  if (!confirm('删除这条打卡？')) return
-  try {
-    await api.deleteCheckIn(id)
-    await refresh()
-  } catch (e) {
-    error.value = e.message
   }
 }
 
 async function removeQuick(id) {
-  if (!confirm('删除这份自评？')) return
+  if (!confirm('删掉这一笔？')) return
   try {
     await api.deleteQuickSelfCheck(id)
     await refresh()

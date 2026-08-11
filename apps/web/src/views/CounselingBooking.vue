@@ -7,17 +7,24 @@
 
     <section v-if="!hasAssessment" class="panel soft-banner" style="margin-bottom: 14px">
       <div>
-        <strong>若你愿意，可先做一次详细评估</strong>
-        <p class="muted" style="margin: 6px 0 0">方便对方更懂你；也可以边约边补，不会拦住你。</p>
+        <strong>想让对方更懂你一点吗？</strong>
+        <p class="muted" style="margin: 6px 0 0">可以先做一份心理评估；也可以边约边补，不会拦住你。</p>
       </div>
-      <router-link class="btn btn-ghost btn-sm" to="/onboarding/assessment">去做</router-link>
+      <router-link class="btn btn-ghost btn-sm" to="/onboarding/assessment">好，我想被更好地理解</router-link>
+    </section>
+    <section v-else class="panel soft-banner" style="margin-bottom: 14px">
+      <div>
+        <strong>底还准吗？</strong>
+        <p class="muted" style="margin: 6px 0 0">近况变化大时，可以更新一下；也可以直接约。</p>
+      </div>
+      <router-link class="btn btn-ghost btn-sm" to="/onboarding/assessment">重新评估一下</router-link>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="coach-home-grid">
       <section class="panel">
-        <h2 class="section-title">提交预约意向</h2>
+        <h2 class="section-title">告诉我方便的时间</h2>
         <form class="form" @submit.prevent="submit">
           <label>
             时段偏好
@@ -37,7 +44,7 @@
             <textarea v-model="form.note" rows="3" placeholder="希望辅导关注什么节点" />
           </label>
           <button class="btn btn-primary" type="submit" :disabled="busy">
-            {{ busy ? '提交中…' : '提交预约' }}
+            {{ busy ? '正在记下…' : '好，帮我约' }}
           </button>
         </form>
       </section>

@@ -1025,6 +1025,9 @@ textarea {
   flex-shrink: 0;
   font-size: 0.9rem;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
 }
 
 .know-row-actions a {

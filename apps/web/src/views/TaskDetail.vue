@@ -336,11 +336,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, STATUS_LABEL } from '../api'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
+const route = useRoute()
 
 const task = ref(null)
 const loading = ref(true)
@@ -447,21 +448,39 @@ function goInterview() {
   activeGate.value = 'interview'
 }
 
+function applyGateQuery() {
+  const g = typeof route.query.gate === 'string' ? route.query.gate : ''
+  if (g === 'hr' || g === 'interview' || g === 'salary') {
+    activeGate.value = g
+    return true
+  }
+  return false
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
     task.value = await api.getTask(props.id)
     syncDraft(task.value)
-    if (task.value.status === 'interview_done') activeGate.value = 'interview'
-    else if (task.value.status === 'salary_done') activeGate.value = 'salary'
-    else if (hrReport.value) activeGate.value = 'hr'
+    if (!applyGateQuery()) {
+      if (task.value.status === 'interview_done') activeGate.value = 'interview'
+      else if (task.value.status === 'salary_done') activeGate.value = 'salary'
+      else if (hrReport.value) activeGate.value = 'hr'
+    }
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
   }
 }
+
+watch(
+  () => route.query.gate,
+  () => {
+    applyGateQuery()
+  },
+)
 
 async function onFile(e) {
   const file = e.target.files?.[0]

@@ -157,7 +157,7 @@ func heuristicAnalysis(ans Answers, m Metrics) AIAnalysis {
 	if m.EmotionLoad >= 3.5 && ans.B4 >= 4 {
 		headline = fmt.Sprintf("近两周压力与自我否定感偏高，当前更适合先从「%s」的教练疏导开始，把评判和可改进点拆开。", scene)
 	}
-	steps := []string{"先开一次 AI 心理疏导，澄清事实与自我评判", "用三分钟自评或打卡看见状态变化"}
+	steps := []string{"先开一次 AI 心理疏导，澄清事实与自我评判", "用「花三分钟看看自己」看见状态变化"}
 	if m.SuggestedNeed == "job_search" {
 		steps = append(steps, "需要过关时再进入人事 / 业务 / 谈薪训练")
 	} else if m.SuggestedNeed == "promotion" || m.SuggestedNeed == "communication" {
@@ -169,7 +169,7 @@ func heuristicAnalysis(ans Answers, m Metrics) AIAnalysis {
 	crisis := ans.CrisisLevel == "elevated"
 	if crisis {
 		headline = "你标出了需要被认真对待的痛苦信号。建议优先寻求专业或紧急支持；产品内职场教练不适合处理危机时刻。"
-		steps = []string{"查看危机求助资源并联系身边可信的人", "确认已知晓资源后，再考虑非危机向的打卡与疏导"}
+		steps = []string{"查看危机求助资源并联系身边可信的人", "确认已知晓资源后，再考虑非危机向的陪伴与疏导"}
 	}
 	return AIAnalysis{
 		Headline:       headline,

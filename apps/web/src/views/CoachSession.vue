@@ -110,13 +110,16 @@ const sceneHuman = computed(() => {
   return map[scene] || SCENE_LABEL[scene] || session.value?.title || '我们正在聊'
 })
 
-const isTrial = computed(() => (session.value?.title || '').includes('轻试'))
+const isTrial = computed(() => {
+  const t = session.value?.title || ''
+  return t.includes('轻松聊聊') || t.includes('轻试')
+})
 
 const gateHint = computed(() => {
   const g = session.value?.suggestGate
   const taskQ = session.value?.relatedTaskId
     ? { path: `/tasks/${session.value.relatedTaskId}`, query: { gate: g } }
-    : { path: '/tasks', query: { gate: g } }
+    : { path: '/tasks/new', query: { gate: g } }
   if (g === 'hr') {
     return { text: '聊到这里，或许可以去练一练「人事关」——把简历主线说清楚。', cta: '去练人事关', to: taskQ }
   }

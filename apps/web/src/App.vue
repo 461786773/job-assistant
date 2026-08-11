@@ -7,7 +7,7 @@
       </router-link>
       <nav class="nav" v-if="auth.user">
         <router-link to="/home">此刻</router-link>
-        <router-link to="/assessments">记录</router-link>
+        <router-link to="/assessments">评估</router-link>
         <router-link to="/wellbeing">状态</router-link>
         <router-link to="/booking">预约私教</router-link>
         <router-link to="/tasks">练习室</router-link>

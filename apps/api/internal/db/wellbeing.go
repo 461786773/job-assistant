@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -152,6 +153,37 @@ func (s *Store) LatestQuickSelfCheckSince(userID string, since time.Time) (*Quic
 		}
 	}
 	return nil, nil
+}
+
+func (s *Store) LatestQuickSelfCheck(userID string) (*QuickSelfCheck, error) {
+	items, err := s.ListQuickSelfChecks(userID, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	return &items[0], nil
+}
+
+func (s *Store) QuickSelfCheckByCoachSession(userID, sessionID string) (*QuickSelfCheck, error) {
+	if strings.TrimSpace(sessionID) == "" {
+		return nil, nil
+	}
+	row := s.db.QueryRow(`
+SELECT id, user_id, at, version, feelings, duration, impacts, distress_score,
+       trigger_note, takeaway, related_coach_session_id, created_at
+FROM quick_self_checks
+WHERE user_id = ? AND related_coach_session_id = ?
+ORDER BY created_at DESC LIMIT 1`, userID, sessionID)
+	c, err := scanQuickSelfCheck(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 func (s *Store) GetQuickSelfCheck(id, userID string) (*QuickSelfCheck, error) {
