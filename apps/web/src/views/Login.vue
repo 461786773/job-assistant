@@ -1,21 +1,25 @@
 <template>
-  <section class="auth-page">
-    <div class="auth-card">
-      <h1>链接进入</h1>
-      <p class="muted">输入用户名进入应用（受控访问）。新用户将先完成心理评测与诉求确认。</p>
-      <form class="form" @submit.prevent="submit">
+  <section class="auth-page welcome-page">
+    <div class="welcome-stage">
+      <p class="welcome-brand reveal">求职助手</p>
+      <p class="welcome-sub reveal reveal-delay-1">职场心理教练</p>
+      <h1 class="welcome-title reveal reveal-delay-2">你先坐一会儿。</h1>
+      <p class="welcome-lead reveal reveal-delay-3">
+        这里有人听你把话说完。进来后可以先画一张职场小像；不想测，直接去聊也完全可以。
+      </p>
+      <form class="welcome-form reveal reveal-delay-4" @submit.prevent="submit">
         <label>
-          用户名
+          怎么称呼你
           <input
             v-model="form.username"
             autocomplete="username"
-            placeholder="默认 default"
+            placeholder="例如 default"
             required
           />
         </label>
         <p v-if="error" class="error">{{ error }}</p>
         <button class="btn btn-primary" type="submit" :disabled="busy">
-          {{ busy ? '进入中…' : '进入' }}
+          {{ busy ? '正在开门…' : '进来坐坐' }}
         </button>
       </form>
     </div>
@@ -44,13 +48,13 @@ async function submit() {
     })
     setSession(data.token, data.user)
     clearProfileCache()
-    const me = await api.me()
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    if (redirect && me.hasInitialAssessment && me.primaryNeed) {
-      router.replace(redirect)
+    if (redirect) {
+      await router.replace(redirect)
       return
     }
-    router.replace(postLoginPath(me))
+    const me = await api.me().catch(() => null)
+    await router.replace(postLoginPath(me))
   } catch (e) {
     error.value = e.message
   } finally {

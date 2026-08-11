@@ -13,6 +13,8 @@ import AssessmentReport from './views/AssessmentReport.vue'
 import NeedSelect from './views/NeedSelect.vue'
 import MyAssessments from './views/MyAssessments.vue'
 import CounselingBooking from './views/CounselingBooking.vue'
+import BigFiveQuiz from './views/BigFiveQuiz.vue'
+import BigFiveResult from './views/BigFiveResult.vue'
 import { api, postLoginPath } from './api'
 import { isLoggedIn } from './auth'
 
@@ -23,22 +25,34 @@ const router = createRouter({
     { path: '/login', redirect: '/' },
     { path: '/register', redirect: '/' },
     {
+      path: '/bigfive',
+      name: 'bigfive-quiz',
+      component: BigFiveQuiz,
+      meta: { auth: true },
+    },
+    {
+      path: '/bigfive/:id',
+      name: 'bigfive-result',
+      component: BigFiveResult,
+      meta: { auth: true },
+    },
+    {
       path: '/onboarding/assessment',
       name: 'initial-assessment',
       component: InitialAssessment,
-      meta: { auth: true, onboarding: true },
+      meta: { auth: true },
     },
     {
       path: '/onboarding/report/:id?',
       name: 'assessment-report',
       component: AssessmentReport,
-      meta: { auth: true, onboarding: true },
+      meta: { auth: true },
     },
     {
       path: '/onboarding/need',
       name: 'need-select',
       component: NeedSelect,
-      meta: { auth: true, onboarding: true },
+      meta: { auth: true },
     },
     { path: '/assessments', name: 'my-assessments', component: MyAssessments, meta: { auth: true } },
     {
@@ -53,7 +67,7 @@ const router = createRouter({
     { path: '/coach/:id', name: 'coach-session', component: CoachSession, meta: { auth: true } },
     { path: '/wellbeing', name: 'wellbeing', component: Wellbeing, meta: { auth: true } },
     { path: '/wellbeing/quick', name: 'quick-self-check', component: QuickSelfCheck, meta: { auth: true } },
-    { path: '/settings', name: 'settings', component: Settings, meta: { auth: true, allowIncomplete: true } },
+    { path: '/settings', name: 'settings', component: Settings, meta: { auth: true } },
     { path: '/tasks', name: 'tasks', component: Workbench, meta: { auth: true } },
     { path: '/tasks/new', name: 'task-new', component: TaskNew, meta: { auth: true } },
     { path: '/tasks/:id', name: 'task-detail', component: TaskDetail, props: true, meta: { auth: true } },
@@ -68,9 +82,9 @@ export function clearProfileCache() {
   profileCacheAt = 0
 }
 
-async function loadProfile() {
+export async function loadProfile(force = false) {
   const now = Date.now()
-  if (profileCache && now - profileCacheAt < 15000) return profileCache
+  if (!force && profileCache && now - profileCacheAt < 15000) return profileCache
   profileCache = await api.me()
   profileCacheAt = now
   return profileCache
@@ -82,29 +96,13 @@ router.beforeEach(async (to) => {
     return { path: '/', query: { redirect: to.fullPath } }
   }
   if (to.meta.guest && loggedIn) {
+    const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : ''
+    if (redirect) return redirect
     try {
       const me = await loadProfile()
       return postLoginPath(me)
     } catch {
       return '/home'
-    }
-  }
-  if (to.meta.auth && loggedIn && !to.meta.allowIncomplete) {
-    try {
-      const me = await loadProfile()
-      const incomplete = postLoginPath(me)
-      if (incomplete !== '/home') {
-        // 允许在引导流内移动；未完成时拦截主功能页
-        if (to.meta.onboarding) return true
-        if (to.name === 'assessment-detail' || to.name === 'my-assessments') {
-          if (!me.hasInitialAssessment) return '/onboarding/assessment'
-          return true
-        }
-        if (to.name === 'settings' || to.name === 'booking') return true
-        return incomplete
-      }
-    } catch {
-      /* ignore */
     }
   }
   return true

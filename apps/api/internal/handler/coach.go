@@ -16,7 +16,8 @@ type createCoachBody struct {
 	RelatedTaskID       string `json:"relatedTaskId"`
 	RelatedEvent        string `json:"relatedEvent"`
 	RelatedQuickCheckID string `json:"relatedQuickCheckId"`
-	SkipQuickGate       bool   `json:"skipQuickGate"` // unused; gate always enforced unless recent check exists
+	Mode                string `json:"mode"` // trial | formal；默认 formal
+	SkipQuickGate       bool   `json:"skipQuickGate"`
 }
 
 const quickGateHours = 24
@@ -88,6 +89,19 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 
 	quickHint := ""
 	quickID := strings.TrimSpace(body.RelatedQuickCheckID)
+	mode := strings.ToLower(strings.TrimSpace(body.Mode))
+	if mode == "" {
+		if body.SkipQuickGate {
+			mode = "trial"
+		} else {
+			mode = "formal"
+		}
+	}
+	if mode != "trial" && mode != "formal" {
+		writeErr(w, http.StatusBadRequest, "mode 需为 trial 或 formal")
+		return
+	}
+
 	var quick *db.QuickSelfCheck
 	if quickID != "" {
 		item, err := h.Store.GetQuickSelfCheck(quickID, claims.UserID)
@@ -101,8 +115,8 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		}
 		quick = item
 		quickHint = coach.FormatQuickCheck(item)
-	} else {
-		// 问卷门禁：近 24h 内需有三分钟自评
+	} else if mode == "formal" {
+		// 正式疏导：近 24h 内建议有三分钟自评
 		recent, err := h.Store.LatestQuickSelfCheckSince(claims.UserID, time.Now().UTC().Add(-quickGateHours*time.Hour))
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
@@ -110,7 +124,7 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		}
 		if recent == nil {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":    "进入疏导前请先完成三分钟自评",
+				"error":    "正式疏导建议先完成三分钟自评",
 				"code":     "quick_check_required",
 				"redirect": "/wellbeing/quick",
 			})
@@ -120,8 +134,10 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		quickID = recent.ID
 		quickHint = coach.FormatQuickCheck(recent)
 	}
+	// trial：可不做短问卷，直接开聊
 
 	assessmentHint := ""
+	bigFiveHint := ""
 	primaryNeed := ""
 	if user, _ := h.Store.GetUserByID(claims.UserID); user != nil {
 		primaryNeed = user.PrimaryNeed
@@ -129,8 +145,11 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 	if latest, _ := h.Store.LatestInitialAssessment(claims.UserID); latest != nil {
 		assessmentHint = latest.SummaryForCoach
 	}
+	if bf, _ := h.Store.LatestBigFiveProfile(claims.UserID); bf != nil {
+		bigFiveHint = bf.SummaryForCoach
+	}
 
-	sess, err := coach.Start(h.LLM, scene, strings.TrimSpace(body.RelatedEvent), taskHint, quickHint, assessmentHint, primaryNeed)
+	sess, err := coach.Start(h.LLM, scene, strings.TrimSpace(body.RelatedEvent), taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
@@ -139,6 +158,9 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 	sess.ID = newID()
 	sess.UserID = claims.UserID
 	sess.RelatedTaskID = relatedTaskID
+	if mode == "trial" {
+		sess.Title = coach.SceneLabel(scene) + " · 轻试疏导"
+	}
 	sess.CreatedAt = now
 	sess.UpdatedAt = now
 	if err := h.Store.CreateCoachSession(sess); err != nil {

@@ -7,15 +7,21 @@
 
     <section class="panel">
       <h2 class="section-title">产品定位</h2>
-      <p>默认身份是<strong>职场心理教练</strong>：在求职、晋升、沟通节点稳住状态、理清选择、练好表达。人事 / 业务 / 谈薪是可调用的过关训练工具。</p>
-      <p class="muted">服务对象优先：3–10 年 ToB / 安全 / 合规迁移或晋升中的职场人。不做应届生、纯小白路径；不做临床诊断。</p>
+      <p>
+        默认身份是<strong>职场心理教练</strong>：在求职、入职适应、晋升、沟通等节点，帮你稳住状态、理清选择、练好表达。人事
+        / 面试 / 谈薪是可调用的过关训练工具。
+      </p>
+      <p class="muted">
+        主要服务：<strong>应届大学生</strong>、<strong>刚入职场的小白</strong>、以及
+        <strong>30 多岁压力较大的职场人</strong>。不做临床诊断，也不替代持证心理咨询。
+      </p>
     </section>
 
     <section class="panel" style="margin-top: 16px">
       <h2 class="section-title">隐私</h2>
       <ul class="plain-list">
-        <li>求职任务与教练会话按用户名隔离，仅本人可见。</li>
-        <li>心理健康打卡默认仅本人可见；首发无组织端监控。</li>
+        <li>求职任务与教练会话按账号隔离，仅本人可见。</li>
+        <li>心理健康相关记录默认仅本人可见；首发无组织端监控。</li>
         <li>数据用于教练个性化与趋势对照，不作录用/晋升评判依据。</li>
       </ul>
     </section>

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type Comp struct {
@@ -81,7 +82,7 @@ func Analyze(client *llm.Client, c *Case) (*Analysis, error) {
 
 	if client != nil && client.Enabled() {
 		raw, err := client.ChatJSON(
-			`你是资深 HRBP，帮助候选人与 HR 谈薪。不要鼓励造假流水。只输出 JSON。`,
+			prompts.SalaryNegotiate,
 			fmt.Sprintf(`当前包：保守%.0f 目标%.0f
 Offer包：保守%.0f 目标%.0f
 底线%.0f 目标%.0f

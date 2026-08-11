@@ -112,6 +112,9 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 	if err := s.migrateAssessmentBooking(); err != nil {
 		return fmt.Errorf("migrate assessment/booking: %w", err)
 	}
+	if err := s.migrateBigFive(); err != nil {
+		return fmt.Errorf("migrate bigfive: %w", err)
+	}
 	if err := s.seedDefaultUser(); err != nil {
 		return fmt.Errorf("seed default user: %w", err)
 	}

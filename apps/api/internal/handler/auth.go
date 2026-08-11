@@ -102,6 +102,13 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	hasBigFive := false
+	var bigFiveID, bigFiveTitle string
+	if bf, err := h.Store.LatestBigFiveProfile(claims.UserID); err == nil && bf != nil {
+		hasBigFive = true
+		bigFiveID = bf.ID
+		bigFiveTitle = bf.PersonaTitle
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":                   user.ID,
 		"username":             user.Username,
@@ -111,6 +118,9 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"latestAssessmentAt":   latestAt,
 		"suggestedNeed":        suggestedNeed,
 		"crisisLevel":          crisisLevel,
+		"hasBigFiveProfile":    hasBigFive,
+		"latestBigFiveId":      bigFiveID,
+		"bigFivePersonaTitle":  bigFiveTitle,
 	})
 }
 

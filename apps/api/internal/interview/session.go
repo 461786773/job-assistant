@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type ChatMsg struct {
@@ -30,14 +31,6 @@ type Session struct {
 	Diagnosis *Diagnosis `json:"diagnosis,omitempty"`
 	UpdatedAt string     `json:"updatedAt,omitempty"`
 }
-
-const systemPrompt = `你是主机厂/安全合规方向的业务面试官，面试对象是 3–10 年 ToB 产品经理。
-目标：识别「讲述表层化」——只有背景职责、缺少取舍/个人贡献/结果/复盘。
-规则：
-1. 问法要具体，一次只问一个问题。
-2. 追问优先：决策取舍、冲突推动、计划拆解、迁移边界、个人贡献。
-3. 不要编造简历没有的经历。
-4. 只输出 JSON。`
 
 func Start(client *llm.Client, resume, jd, company, role string) (*Session, error) {
 	sess := &Session{
@@ -64,7 +57,7 @@ func Start(client *llm.Client, resume, jd, company, role string) (*Session, erro
 请开场。输出 JSON：
 {"question":"面试官第一问（自我介绍/匹配点）","intent":"intro"}`, company, role, truncate(jd, 2500), truncate(resume, 3500))
 
-	raw, err := client.ChatJSON(systemPrompt, user)
+	raw, err := client.ChatJSON(prompts.InterviewSystem, user)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +112,7 @@ func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role 
   }
 }`, company, role, truncate(jd, 2000), truncate(resume, 2500), hist)
 
-		raw, err := client.ChatJSON(systemPrompt+"\n现在进入总结诊断阶段。", user)
+		raw, err := client.ChatJSON(prompts.InterviewDiagnose, user)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +149,7 @@ func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role 
   "intent": "deep_dive|pressure|plan_split|tradeoff"
 }`, sess.Round+1, sess.MaxRounds, company, role, truncate(jd, 2000), truncate(resume, 2500), hist)
 
-	raw, err := client.ChatJSON(systemPrompt, user)
+	raw, err := client.ChatJSON(prompts.InterviewSystem, user)
 	if err != nil {
 		return nil, err
 	}

@@ -1,9 +1,17 @@
 <template>
   <section>
     <div class="hero">
-      <h1>私人心理辅导预约</h1>
-      <p>提交预约意向后人工确认。这是专业支持通道，不在站内开展诊疗，也不承诺诊疗效果。</p>
+      <h1>预约私教</h1>
+      <p>留下你方便的时间，我们人工确认。这是转介通道，不是站内诊疗。</p>
     </div>
+
+    <section v-if="!hasAssessment" class="panel soft-banner" style="margin-bottom: 14px">
+      <div>
+        <strong>若你愿意，可先做一次详细评估</strong>
+        <p class="muted" style="margin: 6px 0 0">方便对方更懂你；也可以边约边补，不会拦住你。</p>
+      </div>
+      <router-link class="btn btn-ghost btn-sm" to="/onboarding/assessment">去做</router-link>
+    </section>
 
     <p v-if="error" class="error">{{ error }}</p>
 
@@ -73,6 +81,7 @@ const items = ref([])
 const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
+const hasAssessment = ref(true)
 const form = reactive({
   preferredSlots: '',
   contactChannel: '',
@@ -91,8 +100,9 @@ function formatTime(iso) {
 async function refresh() {
   loading.value = true
   try {
-    const data = await api.listBookings()
+    const [data, me] = await Promise.all([api.listBookings(), api.me()])
     items.value = data.items || []
+    hasAssessment.value = Boolean(me.hasInitialAssessment)
   } catch (e) {
     error.value = e.message
   } finally {

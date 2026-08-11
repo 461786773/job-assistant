@@ -1,15 +1,17 @@
 <template>
-  <section class="coach-session">
-    <div v-if="loading" class="muted">加载中…</div>
+  <section class="coach-session session-warm">
+    <div v-if="loading" class="muted">我在准备…</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <template v-else-if="session">
-      <div class="hero hero-compact">
-        <h1>{{ session.title || SCENE_LABEL[session.scene] }}</h1>
-        <p>
-          {{ SCENE_LABEL[session.scene] || session.scene }}
-          <span v-if="session.relatedEvent"> · {{ session.relatedEvent }}</span>
-          · {{ session.status === 'done' ? '已结束' : '进行中' }}
-        </p>
+      <div class="session-top">
+        <div>
+          <p class="session-scene">{{ sceneHuman }}</p>
+          <p class="muted">
+            {{ session.status === 'done' || session.crisisFlag ? '这轮先停在这里' : '我们正在聊' }}
+            <span v-if="isTrial"> · 轻松聊聊</span>
+          </p>
+        </div>
+        <router-link class="btn btn-ghost btn-sm" to="/home">先回到安静的一页</router-link>
       </div>
 
       <div v-if="session.crisisFlag" class="crisis-banner">
@@ -17,12 +19,12 @@
       </div>
 
       <div class="coach-layout">
-        <div class="panel chat-panel">
+        <div class="chat-panel session-chat">
           <div class="chat-log">
             <div
               v-for="(m, i) in session.messages || []"
               :key="i"
-              class="chat-bubble"
+              class="chat-bubble letter"
               :class="m.role"
             >
               <div class="chat-role">{{ m.role === 'user' ? '我' : '教练' }}</div>
@@ -33,49 +35,47 @@
             <textarea
               v-model="draft"
               rows="3"
-              placeholder="说说发生了什么，以及此刻最卡住的感受…"
+              placeholder="此刻最卡住的，是一件事，还是一种感觉？"
               :disabled="busy"
             />
             <div class="row">
               <button class="btn btn-primary" type="submit" :disabled="busy || !draft.trim()">
-                {{ busy ? '思考中…' : '发送' }}
+                {{ busy ? '我在听…' : '告诉教练' }}
               </button>
-              <button class="btn btn-ghost" type="button" :disabled="busy" @click="finish">结束本轮</button>
+              <button class="btn btn-ghost" type="button" :disabled="busy" @click="finish">先说到这里</button>
             </div>
             <p v-if="sendError" class="error">{{ sendError }}</p>
           </form>
-          <p v-else class="muted">本轮已结束。可回到工作台新开场景，或去做过关训练。</p>
+          <p v-else class="muted end-note">
+            这轮先停在这里。若还想练表达或投递，可以从旁边慢慢选；也可以就这样休息。
+          </p>
         </div>
 
-        <aside class="panel side-panel">
-          <h3>行动卡</h3>
+        <aside class="side-panel session-side">
+          <h3>今天可以带走的</h3>
           <ul v-if="session.actionItems?.length" class="plain-list">
             <li v-for="(a, i) in session.actionItems" :key="i">{{ a }}</li>
           </ul>
-          <p v-else class="muted">对话推进后会出现 24h 可执行动作。</p>
+          <p v-else class="muted">我们再往下聊几句，会一起找出一件今天就能做的小事。</p>
 
-          <h3 style="margin-top: 18px">下一句怎么说</h3>
+          <h3 style="margin-top: 18px">下一句，可以这样开口</h3>
           <ul v-if="session.scripts?.length" class="plain-list">
             <li v-for="(s, i) in session.scripts" :key="i">{{ s }}</li>
           </ul>
-          <p v-else class="muted">需要话术时会写在这里。</p>
+          <p v-else class="muted">需要开口时，会写在这里。</p>
 
-          <h3 style="margin-top: 18px">需要过关时</h3>
+          <h3 style="margin-top: 18px">若你想换种准备方式</h3>
           <div class="row" style="flex-wrap: wrap">
             <router-link
               v-if="session.relatedTaskId"
-              class="btn btn-primary btn-sm"
+              class="btn btn-ghost btn-sm"
               :to="`/tasks/${session.relatedTaskId}`"
             >
-              打开关联任务
+              打开这份练习
             </router-link>
-            <router-link class="btn btn-ghost btn-sm" to="/tasks">过关任务列表</router-link>
-            <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">三分钟自评</router-link>
-            <router-link class="btn btn-ghost btn-sm" to="/booking">预约私人辅导</router-link>
-            <router-link class="btn btn-ghost btn-sm" to="/wellbeing">记一笔打卡</router-link>
-          </div>
-          <div class="row" style="margin-top: 12px">
-            <router-link class="btn btn-ghost btn-sm" to="/home">返回教练工作台</router-link>
+            <router-link class="btn btn-ghost btn-sm" to="/tasks">去练习室看看</router-link>
+            <router-link class="btn btn-ghost btn-sm" to="/wellbeing/quick">留下今天的状态</router-link>
+            <router-link class="btn btn-ghost btn-sm" to="/booking">预约私教</router-link>
           </div>
         </aside>
       </div>
@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, CRISIS_HELP, SCENE_LABEL } from '../api'
 
@@ -95,6 +95,18 @@ const error = ref('')
 const draft = ref('')
 const busy = ref(false)
 const sendError = ref('')
+
+const sceneHuman = computed(() => {
+  const map = {
+    job_search: '求职这件事',
+    promotion: '晋升与述职',
+    communication: '沟通与冲突',
+  }
+  const scene = session.value?.scene
+  return map[scene] || SCENE_LABEL[scene] || session.value?.title || '我们正在聊'
+})
+
+const isTrial = computed(() => (session.value?.title || '').includes('轻试'))
 
 async function load() {
   loading.value = true

@@ -7,28 +7,17 @@ import (
 
 	"github.com/zhangyongjie/job-assistant/internal/db"
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
-const CrisisHelpText = `如果你正在经历强烈的自我伤害念头，或担心自己可能伤害他人，请立刻寻求专业或紧急帮助：
-· 当地紧急求助电话（中国大陆可拨打 120 / 当地心理援助热线）
-· 可联系身边可信的人陪同就医
-本产品是职场心理教练，不能替代持证心理咨询或精神科诊疗，也不会提供危机陪护。`
+// CrisisHelpText 兼容旧引用；正文见 prompts.CrisisHelp。
+const CrisisHelpText = prompts.CrisisHelp
 
 var sceneLabel = map[string]string{
 	"job_search":    "求职 / 跳槽",
 	"promotion":     "晋升 / 述职",
 	"communication": "职场沟通 / 冲突",
 }
-
-const systemPrompt = `你是「职场心理教练」，服务 3–10 年 ToB / 安全 / 合规方向职场人。
-你的任务：在求职、晋升、沟通高压节点，帮用户拆开「事实 vs 自我评判」，稳住状态，给出 24 小时内可执行的下一步；需要过关训练时建议跳转人事/业务/谈薪工具。
-
-硬性边界：
-1. 不做临床诊断，不说「你有抑郁症/焦虑症」等病名，不开药。
-2. 不替用户做重大人生决定（离职/接受 offer/撕破脸），只澄清标准与选项。
-3. 共情后必须落到可验证的下一步，禁止纯鸡汤收尾。
-4. 若用户流露自伤/伤人等危机信号：crisisFlag=true，reply 中明确转介专业帮助，停止常规深度陪聊。
-5. 只输出 JSON。`
 
 func SceneLabel(scene string) string {
 	if v, ok := sceneLabel[scene]; ok {
@@ -37,7 +26,7 @@ func SceneLabel(scene string) string {
 	return scene
 }
 
-func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, primaryNeed string) (*db.CoachSession, error) {
+func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed string) (*db.CoachSession, error) {
 	sess := &db.CoachSession{
 		Scene:        scene,
 		Title:        SceneLabel(scene) + " · 教练会话",
@@ -48,16 +37,17 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
 		Status:       "active",
 	}
 
-	opening := heuristicOpening(scene, relatedEvent, quickHint, assessmentHint)
+	opening := heuristicOpening(scene, relatedEvent, quickHint, assessmentHint, bigFiveHint)
 	if client != nil && client.Enabled() {
 		user := fmt.Sprintf(`场景：%s（%s）
 用户诉求：%s
 关联事件：%s
 关联任务摘要：%s
 初次评测摘要：%s
+职场画像摘要：%s
 三分钟自评摘要：%s
 
-请给出开场：结合评测与自评（禁止诊断病名），邀请用户用 2–3 句补充「发生了什么」。
+请给出开场：结合评测、画像与自评（禁止诊断病名），邀请用户用 2–3 句补充「发生了什么」。
 若困扰分≥8 或评测危机偏高，语气放缓并轻提示专业支持 / 预约通道。
 输出 JSON：
 {
@@ -66,8 +56,8 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
   "scripts":[],
   "crisisFlag":false,
   "suggestGate":""
-}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(assessmentHint, 800), truncate(quickHint, 600))
-		raw, err := client.ChatJSON(systemPrompt, user)
+}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(assessmentHint, 800), truncate(bigFiveHint, 600), truncate(quickHint, 600))
+		raw, err := client.ChatJSON(prompts.CoachSystem, user)
 		if err == nil {
 			var out struct {
 				Reply string `json:"reply"`
@@ -125,7 +115,7 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
   "done":false
 }`, sess.Scene, sess.RelatedEvent, truncate(taskHint, 800), hist)
 
-	raw, err := client.ChatJSON(systemPrompt, user)
+	raw, err := client.ChatJSON(prompts.CoachSystem, user)
 	if err != nil {
 		return nil, err
 	}
@@ -158,10 +148,13 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
 	return sess, nil
 }
 
-func heuristicOpening(scene, event, quickHint, assessmentHint string) string {
+func heuristicOpening(scene, event, quickHint, assessmentHint, bigFiveHint string) string {
 	base := fmt.Sprintf("我们先从「%s」这个节点聊。", SceneLabel(scene))
 	if strings.TrimSpace(event) != "" {
 		base += fmt.Sprintf("你提到和「%s」有关。", event)
+	}
+	if strings.TrimSpace(bigFiveHint) != "" {
+		base += "\n\n你的职场画像（风格参考，不是诊断）：\n" + truncate(strings.TrimSpace(bigFiveHint), 400)
 	}
 	if strings.TrimSpace(assessmentHint) != "" {
 		base += "\n\n你的初次评测里，我记下了这些要点（描述性摘要，不是诊断）：\n" + truncate(strings.TrimSpace(assessmentHint), 500)

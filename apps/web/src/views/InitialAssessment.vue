@@ -1,8 +1,8 @@
 <template>
   <section>
     <div class="hero">
-      <h1>初次心理评测</h1>
-      <p>职场向自我评估，约 5–8 分钟。不是临床诊断；答案仅本人可见。</p>
+      <h1>想被更深地接住时</h1>
+      <p>大约几分钟的心里盘点。不是诊断，答案只有你自己看得见。轻松聊聊时可以不做。</p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -204,6 +204,7 @@
         <button class="btn btn-primary" type="submit" :disabled="busy">
           {{ busy ? '提交中…' : step < totalSteps ? '下一步' : '提交并生成分析' }}
         </button>
+        <button class="btn btn-ghost" type="button" @click="skipForLater">先去别处转转</button>
       </div>
     </form>
   </section>
@@ -241,11 +242,11 @@ const form = reactive({
 })
 
 const SCENE_OPTS = [
-  { value: 'job_search', label: '求职 / 跳槽' },
-  { value: 'promotion', label: '晋升 / 述职 / 职级沟通' },
-  { value: 'communication', label: '职场沟通 / 冲突 / 向上管理' },
-  { value: 'mixed', label: '以上都有，暂难分清' },
-  { value: 'other', label: '其他职场压力' },
+  { value: 'job_search', label: '求职这件事' },
+  { value: 'promotion', label: '晋升和述职' },
+  { value: 'communication', label: '和人较劲 / 说不清边界' },
+  { value: 'mixed', label: '好几件事缠在一起' },
+  { value: 'other', label: '别的职场心事' },
 ]
 const WORK_OPTS = [
   { value: 'employed_stable', label: '在职，暂无明确离职计划' },
@@ -345,5 +346,9 @@ async function onNext() {
   } finally {
     busy.value = false
   }
+}
+
+function skipForLater() {
+  router.push('/home')
 }
 </script>

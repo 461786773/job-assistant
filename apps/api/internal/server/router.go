@@ -43,6 +43,12 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 			r.Get("/latest", h.LatestAssessment)
 			r.Get("/{id}", h.GetAssessment)
 		})
+		r.Route("/api/bigfive", func(r chi.Router) {
+			r.Get("/", h.ListBigFive)
+			r.Post("/", h.CreateBigFive)
+			r.Get("/latest", h.LatestBigFive)
+			r.Get("/{id}", h.GetBigFive)
+		})
 		r.Route("/api/counseling/bookings", func(r chi.Router) {
 			r.Get("/", h.ListBookings)
 			r.Post("/", h.CreateBooking)

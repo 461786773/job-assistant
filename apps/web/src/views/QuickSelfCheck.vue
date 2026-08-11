@@ -1,10 +1,10 @@
 <template>
   <section>
     <div class="hero">
-      <h1>三分钟自评</h1>
+      <h1>花三分钟看看自己</h1>
       <p>
-        <template v-if="goCoachNext">进入疏导前的问卷门禁：填完后将带你进入教练会话。</template>
-        <template v-else>轻量自我觉察，不是临床测评。没有标准答案，勾最贴近此刻的即可。</template>
+        <template v-if="goCoachNext">先用三分钟看看自己，再开始，我会更接得住你。</template>
+        <template v-else>没有标准答案，勾最贴近此刻的即可。这不是临床测评。</template>
       </p>
     </div>
 
@@ -106,7 +106,7 @@
         </div>
         <div class="row" style="margin-top: 14px; flex-wrap: wrap; gap: 10px">
           <router-link class="btn btn-ghost" to="/wellbeing">回心理跟踪</router-link>
-          <router-link class="btn btn-ghost" to="/home">回教练工作台</router-link>
+          <router-link class="btn btn-ghost" to="/home">先回到安静的一页</router-link>
         </div>
       </section>
     </template>
@@ -209,9 +209,11 @@ async function startCoach(scene) {
   starting.value = true
   error.value = ''
   try {
+    const mode = typeof route.query.mode === 'string' ? route.query.mode : 'formal'
     const sess = await api.createCoachSession({
       scene,
       relatedQuickCheckId: saved.value.id,
+      mode,
     })
     router.push(`/coach/${sess.id}`)
   } catch (e) {

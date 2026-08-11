@@ -65,6 +65,11 @@ export const api = {
     request('/api/assessments/', { method: 'POST', body: JSON.stringify(body) }),
   latestAssessment: () => request('/api/assessments/latest'),
   getAssessment: (id) => request(`/api/assessments/${id}`),
+  listBigFive: () => request('/api/bigfive/'),
+  createBigFive: (body) =>
+    request('/api/bigfive/', { method: 'POST', body: JSON.stringify(body) }),
+  latestBigFive: () => request('/api/bigfive/latest'),
+  getBigFive: (id) => request(`/api/bigfive/${id}`),
   listBookings: () => request('/api/counseling/bookings/'),
   createBooking: (body) =>
     request('/api/counseling/bookings/', { method: 'POST', body: JSON.stringify(body) }),
@@ -135,19 +140,19 @@ export const STATUS_LABEL = {
 }
 
 export const SCENE_LABEL = {
-  job_search: '求职 / 跳槽',
-  promotion: '晋升 / 述职',
-  communication: '职场沟通 / 冲突',
+  job_search: '求职这件事',
+  promotion: '晋升和述职',
+  communication: '和人较劲之后',
 }
 
 export const EVENT_OPTIONS = [
-  { value: '', label: '无特定事件' },
+  { value: '', label: '没什么特定的事' },
   { value: 'interview', label: '面试' },
   { value: 'reject', label: '挂面' },
   { value: 'salary_talk', label: '谈薪' },
   { value: 'promotion_review', label: '晋升述职' },
-  { value: 'conflict', label: '冲突会' },
-  { value: 'other', label: '其他' },
+  { value: 'conflict', label: '吵过一架 / 开过难受的会' },
+  { value: 'other', label: '别的事' },
 ]
 
 export const MOOD_OPTIONS = ['平静', '焦虑', '低落', '烦躁', '兴奋', '耗竭', '羞耻']
@@ -185,15 +190,23 @@ export const TAKEAWAY_OPTIONS = [
   { value: 'unsure_but_here', label: '我也不知道想带走什么', hint: '但我来了' },
 ]
 
+/** 五种具体诉求：首页「想聊聊」与诉求确认页共用 */
 export const NEED_OPTIONS = [
-  { value: 'job_search', label: '找工作 / 跳槽', desc: '简历、面试、谈薪与求职压力' },
-  { value: 'promotion', label: '晋升 / 述职', desc: '述职压力、与上级预期对齐' },
-  { value: 'communication', label: '沟通 / 冲突', desc: '边界、向上表达、会后内耗' },
-  { value: 'counsel_first', label: '先疏导稳住', desc: '暂不进过关，先把状态理清' },
-  { value: 'unsure', label: '暂不确定', desc: '先看看评估建议再决定' },
+  { value: 'job_search', label: '求职这件事', desc: '投递、挂面、不敢告诉同事的时候' },
+  { value: 'promotion', label: '晋升和述职', desc: '怕讲浅、怕被看轻的时候' },
+  { value: 'communication', label: '和人较劲之后', desc: '会后还在心里吵、边界说不清时' },
+  { value: 'counsel_first', label: '先把心安下来', desc: '先不想冲关，只想有人接住我' },
+  { value: 'unsure', label: '我还说不清', desc: '说不上卡在哪，但就是想找个人聊聊' },
 ]
 
 export const NEED_LABEL = Object.fromEntries(NEED_OPTIONS.map((o) => [o.value, o.label]))
+
+/** 诉求 → 教练会话 scene（后端仅支持三类场景） */
+export function coachSceneForNeed(need) {
+  if (need === 'promotion' || need === 'communication' || need === 'job_search') return need
+  if (need === 'counsel_first') return 'communication'
+  return 'job_search'
+}
 
 export const BOOKING_STATUS_LABEL = {
   requested: '待确认',
@@ -204,8 +217,8 @@ export const BOOKING_STATUS_LABEL = {
 
 export const CRISIS_HELP = `如果你正在经历强烈的自我伤害念头，或担心可能伤害他人，请立刻寻求专业或紧急帮助（如 120 / 当地心理援助热线），并联系身边可信的人。本产品是职场心理教练，不能替代持证心理咨询或精神科诊疗。`
 
+/** 登录后：未做过职场画像 → 先进画像（可跳过）；否则进此刻 */
 export function postLoginPath(me) {
-  if (!me?.hasInitialAssessment) return '/onboarding/assessment'
-  if (!me?.primaryNeed) return '/onboarding/need'
+  if (me && !me.hasBigFiveProfile) return '/bigfive?welcome=1'
   return '/home'
 }

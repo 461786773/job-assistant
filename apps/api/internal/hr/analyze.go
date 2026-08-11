@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type DimensionScore struct {
@@ -40,16 +41,6 @@ type Report struct {
 	Source       string           `json:"source"` // llm | heuristic
 	GeneratedAt  string           `json:"generatedAt"`
 }
-
-const systemPrompt = `你是一位严谨的社招人事（HR），专门筛选 3–10 年 ToB / 安全 / 合规 / 车联网相关产品经理简历。
-你的任务是：对照目标 JD，从「人事 6 秒筛简历」视角给分、找硬伤、给可执行改写清单。
-
-硬性规则：
-1. 不要编造候选人没有的经历；缺信息就在 issues 里标「待补充」。
-2. 分数必须有扣分理由，禁止空泛夸奖。
-3. 关注：与 JD 匹配度、职业主线是否清晰、量化与客户场景可信度、时间断层/过短经历/术语硬伤/夸大风险。
-4. 改写建议要具体到可改的句子或段落，action 只能是 keep/compress/rewrite/quantify。
-5. 只输出 JSON，不要 Markdown。`
 
 func Analyze(client *llm.Client, resume, jd, company, role string) (*Report, error) {
 	if client != nil && client.Enabled() {
@@ -91,7 +82,7 @@ func analyzeWithLLM(client *llm.Client, resume, jd, company, role string) (*Repo
   ]
 }`, company, role, jd, resume)
 
-	content, err := client.ChatJSON(systemPrompt, user)
+	content, err := client.ChatJSON(prompts.HRScreen, user)
 	if err != nil {
 		return nil, err
 	}

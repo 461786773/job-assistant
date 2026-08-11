@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type aiApplyResponse struct {
@@ -18,16 +19,6 @@ type aiApplyResponse struct {
 	} `json:"changes"`
 	Summary string `json:"summary"`
 }
-
-const applyAISystem = `你是资深简历改写编辑，服务 3–10 年 ToB / 安全 / 合规求职者。
-任务：根据改写清单，只改动简历中对应位置的文字，输出完整更新后的简历。
-
-硬性规则：
-1. 禁止编造候选人没有的公司、项目、指标、职级；缺信息用更稳妥表述或跳过该项。
-2. 尽量保留原有结构、标题层级与未点名的段落；不要重写整份简历。
-3. 优先定位「原文摘录」；找不到则根据 target/reason 定位最相关的一句/段落后改写。
-4. 改写方向参考「建议写法」，但要自然融入上下文，可微调措辞使语气一致。
-5. 只输出 JSON，不要 Markdown。`
 
 // ApplyRewritesWithAI asks the model to surgically edit resume for selected rewrite items.
 func ApplyRewritesWithAI(client *llm.Client, resume, jd, company, role string, items []RewriteItem, indexes []int) (string, []ApplyResult, error) {
@@ -85,7 +76,7 @@ func ApplyRewritesWithAI(client *llm.Client, resume, jd, company, role string, i
 要求：changes 必须覆盖上面每一个 index；若某条无法安全落地则 ok=false 并说明原因，且不要为该条捏造事实。`,
 		company, role, jd, resume, string(rawItems))
 
-	content, err := client.ChatJSON(applyAISystem, user)
+	content, err := client.ChatJSON(prompts.ResumeRewrite, user)
 	if err != nil {
 		return "", nil, err
 	}

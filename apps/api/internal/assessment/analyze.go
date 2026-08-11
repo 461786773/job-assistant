@@ -7,6 +7,7 @@ import (
 
 	"github.com/zhangyongjie/job-assistant/internal/db"
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type Answers struct {
@@ -69,9 +70,6 @@ var sceneLabel = map[string]string{
 	"other":         "其他职场压力",
 }
 
-const systemPrompt = `你是职场心理教练产品的评估分析模块。根据用户初次自评问卷，输出描述性摘要与建议路径。
-硬性边界：禁止临床诊断病名；禁止保证升职/拿 offer；危机时明确转介专业帮助；只输出 JSON。`
-
 func Analyze(client *llm.Client, ans Answers) (Metrics, AIAnalysis, string, error) {
 	m := computeMetrics(ans)
 	analysis := heuristicAnalysis(ans, m)
@@ -93,7 +91,7 @@ func Analyze(client *llm.Client, ans Answers) (Metrics, AIAnalysis, string, erro
   "boundaryNote":"非诊疗边界一句",
   "crisis":false
 }`, string(payload))
-		raw, err := client.ChatJSON(systemPrompt, user)
+		raw, err := client.ChatJSON(prompts.AssessmentAnalyze, user)
 		if err == nil {
 			var out AIAnalysis
 			if decode(raw, &out) == nil && strings.TrimSpace(out.Headline) != "" {
