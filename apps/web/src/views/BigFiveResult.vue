@@ -13,12 +13,22 @@
     <template v-else-if="profile">
       <section class="panel bigfive-persona">
         <p class="persona-title">{{ profile.personaTitle }}</p>
-        <p class="muted">{{ profile.personaBody || profile.personaBlurb }}</p>
+        <p class="persona-hook">{{ profile.personaBlurb }}</p>
+        <div class="persona-split">
+          <div class="persona-block">
+            <span class="persona-kicker">双刃</span>
+            <p>{{ personaParts.edge }}</p>
+          </div>
+          <div class="persona-block persona-block-shadow" v-if="personaParts.shadow">
+            <span class="persona-kicker">硬伤</span>
+            <p>{{ personaParts.shadow }}</p>
+          </div>
+        </div>
         <div class="tag-cloud" v-if="profile.tags?.length">
           <span v-for="t in profile.tags" :key="t" class="tag-pill">{{ t }}</span>
         </div>
         <p class="muted" style="margin-top: 12px; font-size: 0.86rem">
-          这是风格速写，会随阶段变化；不是诊断，也不是能力排名。
+          会刺一点，才有用。风格速写不是定论，不是诊断，也不是能力排名。
         </p>
       </section>
 
@@ -82,6 +92,33 @@ const dims = computed(() => {
   })
 })
 
+const personaParts = computed(() => {
+  const body = String(profile.value?.personaBody || '').trim()
+  if (!body) {
+    return { edge: profile.value?.personaBlurb || '', shadow: '' }
+  }
+  const marker = '\n\n硬伤：'
+  const idx = body.indexOf(marker)
+  if (idx >= 0) {
+    let edge = body.slice(0, idx).trim()
+    if (edge.startsWith('双刃：')) edge = edge.slice('双刃：'.length).trim()
+    return {
+      edge,
+      shadow: body.slice(idx + marker.length).trim(),
+    }
+  }
+  const alt = body.indexOf('硬伤：')
+  if (alt >= 0) {
+    let edge = body.slice(0, alt).trim()
+    if (edge.startsWith('双刃：')) edge = edge.slice('双刃：'.length).trim()
+    return {
+      edge,
+      shadow: body.slice(alt + '硬伤：'.length).trim(),
+    }
+  }
+  return { edge: body, shadow: '' }
+})
+
 function parseScores(raw) {
   if (!raw) return null
   if (typeof raw === 'object') return raw
@@ -130,3 +167,40 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.persona-hook {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--text, #1c241f);
+}
+.persona-split {
+  display: grid;
+  gap: 10px;
+}
+.persona-block {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2, #eef3ef) 80%, transparent);
+}
+.persona-block p {
+  margin: 6px 0 0;
+  line-height: 1.55;
+}
+.persona-block-shadow {
+  background: color-mix(in srgb, #c45c3e 10%, var(--surface, #fff));
+  border: 1px solid color-mix(in srgb, #c45c3e 28%, transparent);
+}
+.persona-kicker {
+  display: inline-block;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #66726a);
+  font-weight: 600;
+}
+.persona-block-shadow .persona-kicker {
+  color: #a3472e;
+}
+</style>

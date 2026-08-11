@@ -65,6 +65,10 @@
           <p v-else class="muted">需要开口时，会写在这里。</p>
 
           <h3 style="margin-top: 18px">若你想换种准备方式</h3>
+          <div v-if="gateHint" class="gate-suggest">
+            <p>{{ gateHint.text }}</p>
+            <router-link class="btn btn-primary btn-sm" :to="gateHint.to">{{ gateHint.cta }}</router-link>
+          </div>
           <div class="row" style="flex-wrap: wrap">
             <router-link
               v-if="session.relatedTaskId"
@@ -108,6 +112,23 @@ const sceneHuman = computed(() => {
 
 const isTrial = computed(() => (session.value?.title || '').includes('轻试'))
 
+const gateHint = computed(() => {
+  const g = session.value?.suggestGate
+  const taskQ = session.value?.relatedTaskId
+    ? { path: `/tasks/${session.value.relatedTaskId}`, query: { gate: g } }
+    : { path: '/tasks', query: { gate: g } }
+  if (g === 'hr') {
+    return { text: '聊到这里，或许可以去练一练「人事关」——把简历主线说清楚。', cta: '去练人事关', to: taskQ }
+  }
+  if (g === 'interview') {
+    return { text: '表达可以再压一压。练习室里有业务/面试关，把下一句练熟。', cta: '去练业务关', to: taskQ }
+  }
+  if (g === 'salary') {
+    return { text: '若卡在开口谈钱，可以去谈薪关对一下结构与话术。', cta: '去练谈薪关', to: taskQ }
+  }
+  return null
+})
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -143,3 +164,16 @@ async function finish() {
 watch(() => route.params.id, load)
 onMounted(load)
 </script>
+
+<style scoped>
+.gate-suggest {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2, #eef3ef) 85%, transparent);
+}
+.gate-suggest p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+</style>

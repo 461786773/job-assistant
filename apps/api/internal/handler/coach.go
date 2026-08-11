@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/zhangyongjie/job-assistant/internal/bigfive"
 	"github.com/zhangyongjie/job-assistant/internal/coach"
 	"github.com/zhangyongjie/job-assistant/internal/db"
 )
@@ -146,7 +147,10 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 		assessmentHint = latest.SummaryForCoach
 	}
 	if bf, _ := h.Store.LatestBigFiveProfile(claims.UserID); bf != nil {
-		bigFiveHint = bf.SummaryForCoach
+		bigFiveHint = bigfive.SummaryForCoachLive(bf.PersonaID, bf.Scores)
+		if bigFiveHint == "" {
+			bigFiveHint = bf.SummaryForCoach
+		}
 	}
 
 	sess, err := coach.Start(h.LLM, scene, strings.TrimSpace(body.RelatedEvent), taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed)
@@ -205,7 +209,24 @@ func (h *Handler) ReplyCoachSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updated, err := coach.Reply(h.LLM, sess, body.Message, taskHint)
+	assessmentHint := ""
+	bigFiveHint := ""
+	quickHint := ""
+	if latest, _ := h.Store.LatestInitialAssessment(claims.UserID); latest != nil {
+		assessmentHint = latest.SummaryForCoach
+	}
+	if bf, _ := h.Store.LatestBigFiveProfile(claims.UserID); bf != nil {
+		bigFiveHint = bigfive.SummaryForCoachLive(bf.PersonaID, bf.Scores)
+		if bigFiveHint == "" {
+			bigFiveHint = bf.SummaryForCoach
+		}
+	}
+	if recent, _ := h.Store.LatestQuickSelfCheckSince(claims.UserID, time.Now().UTC().Add(-quickGateHours*time.Hour)); recent != nil {
+		quickHint = coach.FormatQuickCheck(recent)
+	}
+	profileCtx := coach.MergeUserProfile(bigFiveHint, assessmentHint, quickHint)
+
+	updated, err := coach.Reply(h.LLM, sess, body.Message, taskHint, profileCtx)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

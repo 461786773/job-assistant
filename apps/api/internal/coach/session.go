@@ -26,6 +26,24 @@ func SceneLabel(scene string) string {
 	return scene
 }
 
+// MergeUserProfile 把职场画像、初次评估、三分钟自评合成一段「合读」上下文。
+func MergeUserProfile(bigFiveHint, assessmentHint, quickHint string) string {
+	var parts []string
+	if s := strings.TrimSpace(bigFiveHint); s != "" {
+		parts = append(parts, "【职场风格画像·较稳定】\n"+s)
+	}
+	if s := strings.TrimSpace(assessmentHint); s != "" {
+		parts = append(parts, "【初次评估详情·近期基线】\n"+s)
+	}
+	if s := strings.TrimSpace(quickHint); s != "" {
+		parts = append(parts, "【此刻三分钟自评】\n"+s)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, "\n\n") + "\n\n合读说明：画像看协作与压力习惯，评估看近两周压力与卡住点，自评看此刻状态。三者描述同一个人，须合在一起用；禁止诊断病名，禁止只引用其中一块。"
+}
+
 func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed string) (*db.CoachSession, error) {
 	sess := &db.CoachSession{
 		Scene:        scene,
@@ -37,17 +55,18 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
 		Status:       "active",
 	}
 
-	opening := heuristicOpening(scene, relatedEvent, quickHint, assessmentHint, bigFiveHint)
+	profileCtx := MergeUserProfile(bigFiveHint, assessmentHint, quickHint)
+	opening := heuristicOpening(scene, relatedEvent, profileCtx)
 	if client != nil && client.Enabled() {
 		user := fmt.Sprintf(`场景：%s（%s）
 用户诉求：%s
 关联事件：%s
 关联任务摘要：%s
-初次评测摘要：%s
-职场画像摘要：%s
-三分钟自评摘要：%s
 
-请给出开场：结合评测、画像与自评（禁止诊断病名），邀请用户用 2–3 句补充「发生了什么」。
+【用户综合档案】（画像 + 评估 + 自评，必须合读）
+%s
+
+请给出开场：合读档案后自然接住用户（禁止诊断病名；不要分别背诵两套材料），邀请用户用 2–3 句补充「发生了什么」。
 若困扰分≥8 或评测危机偏高，语气放缓并轻提示专业支持 / 预约通道。
 输出 JSON：
 {
@@ -56,7 +75,7 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
   "scripts":[],
   "crisisFlag":false,
   "suggestGate":""
-}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(assessmentHint, 800), truncate(bigFiveHint, 600), truncate(quickHint, 600))
+}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200))
 		raw, err := client.ChatJSON(prompts.CoachSystem, user)
 		if err == nil {
 			var out struct {
@@ -71,7 +90,7 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
 	return sess, nil
 }
 
-func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string) (*db.CoachSession, error) {
+func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint, profileCtx string) (*db.CoachSession, error) {
 	if sess == nil {
 		return nil, fmt.Errorf("会话不存在")
 	}
@@ -100,20 +119,27 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
 关联事件：%s
 关联任务摘要：%s
 
+【用户综合档案】（画像 + 评估 + 自评，必须合读，每轮都要参考）
+%s
+
 【对话】
 %s
 
-请按教练骨架推进（澄清事实/评判 → 命名情绪与需求 → 1–3 个选项 → 一个 24h 动作 + 可选「下一句怎么说」）。
+请按此顺序写 reply：
+1) 若用户本轮有情绪/疲惫/压力：第一句必须共情（具体点出心理层面的感受，勿空泛「辛苦了」）；
+2) 结合综合档案调整接话方式与侧重点（画像定节奏，评估定压力与目标），勿把两套资料割裂；
+3) 再澄清事实 vs 自我评判，或命名情绪与需求；
+4) 再给 1–3 个选项，并收束到一个 24h 动作（可选附「下一句怎么说」）。
 若需要过关训练，suggestGate 填 hr|interview|salary，否则空字符串。
 输出 JSON：
 {
-  "reply":"教练回复",
+  "reply":"教练回复（有情绪时必须以共情句开头）",
   "actionItems":["24h 内可做的动作"],
   "scripts":["可选话术"],
   "crisisFlag":false,
   "suggestGate":"",
   "done":false
-}`, sess.Scene, sess.RelatedEvent, truncate(taskHint, 800), hist)
+}`, sess.Scene, sess.RelatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200), hist)
 
 	raw, err := client.ChatJSON(prompts.CoachSystem, user)
 	if err != nil {
@@ -123,6 +149,7 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
 		Reply       string   `json:"reply"`
 		ActionItems []string `json:"actionItems"`
 		Scripts     []string `json:"scripts"`
+		SuggestGate string   `json:"suggestGate"`
 		CrisisFlag  bool     `json:"crisisFlag"`
 		Done        bool     `json:"done"`
 	}
@@ -142,27 +169,33 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint string)
 	if len(out.Scripts) > 0 {
 		sess.Scripts = out.Scripts
 	}
+	if g := normalizeSuggestGate(out.SuggestGate); g != "" {
+		sess.SuggestGate = g
+	}
 	if out.Done {
 		sess.Status = "done"
 	}
 	return sess, nil
 }
 
-func heuristicOpening(scene, event, quickHint, assessmentHint, bigFiveHint string) string {
+func normalizeSuggestGate(g string) string {
+	switch strings.ToLower(strings.TrimSpace(g)) {
+	case "hr", "interview", "salary":
+		return strings.ToLower(strings.TrimSpace(g))
+	default:
+		return ""
+	}
+}
+
+func heuristicOpening(scene, event, profileCtx string) string {
 	base := fmt.Sprintf("我们先从「%s」这个节点聊。", SceneLabel(scene))
 	if strings.TrimSpace(event) != "" {
 		base += fmt.Sprintf("你提到和「%s」有关。", event)
 	}
-	if strings.TrimSpace(bigFiveHint) != "" {
-		base += "\n\n你的职场画像（风格参考，不是诊断）：\n" + truncate(strings.TrimSpace(bigFiveHint), 400)
-	}
-	if strings.TrimSpace(assessmentHint) != "" {
-		base += "\n\n你的初次评测里，我记下了这些要点（描述性摘要，不是诊断）：\n" + truncate(strings.TrimSpace(assessmentHint), 500)
-	}
-	if strings.TrimSpace(quickHint) != "" {
-		base += "\n\n刚才的三分钟自评：\n" + strings.TrimSpace(quickHint)
-		if strings.Contains(quickHint, "困扰分 8") || strings.Contains(quickHint, "困扰分 9") || strings.Contains(quickHint, "困扰分 10") {
-			base += "\n\n你现在的困扰分偏高。我们可以先把步子放慢；若持续很难受，也可预约私人心理辅导通道——我这边是职场教练，不能替代诊疗。"
+	if strings.TrimSpace(profileCtx) != "" {
+		base += "\n\n我这边已经把你的职场画像和评估放在一起看了（风格参考，不是诊断）。"
+		if strings.Contains(profileCtx, "困扰分 8") || strings.Contains(profileCtx, "困扰分 9") || strings.Contains(profileCtx, "困扰分 10") {
+			base += "你现在的困扰分偏高。我们可以先把步子放慢；若持续很难受，也可预约私人心理辅导通道——我这边是职场教练，不能替代诊疗。"
 		}
 		base += "\n\n想先补充一两句：最近具体发生了什么？还是直接从「今天想带走的那一点」聊起？"
 		return base
@@ -233,6 +266,9 @@ func orDash(a, b string) string {
 
 func heuristicReply(sess *db.CoachSession, userText string) *db.CoachSession {
 	reply := "我听到了。我们先拆一下：哪一句是可核对的事实，哪一句是你对自己的评判？然后选一个 24 小时内最小动作——哪怕只是写清「今晚只改简历主线一段」也可以。"
+	if looksEmotionHeavy(userText) {
+		reply = "我了解这种疲累——来自心里的，往往比身体上的疲惫更重。你可以先不用急着「振作」。我们慢慢来：这份累，更像撑太久了，还是最近有一件事特别耗你？"
+	}
 	if len(sess.Messages) >= 5 {
 		reply = "这一轮我们可以先收个口：请定一个今天就能做完的小动作（例如：列出挂面里可改进的 2 点；或给上级发一句澄清预期的草稿）。需要练表达时，再去过关训练里跑人事/业务/谈薪。"
 		sess.ActionItems = []string{"写下今天唯一要完成的一件小事，并设一个结束时间"}
@@ -247,6 +283,16 @@ func detectCrisis(text string) bool {
 	t := strings.ToLower(text)
 	for _, k := range keys {
 		if strings.Contains(t, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func looksEmotionHeavy(text string) bool {
+	keys := []string{"太累", "好累", "累了", "疲惫", "撑不住", "喘不过气", "心累", "崩溃", "难受", "焦虑", "委屈", "想哭", "空耗", "燃尽"}
+	for _, k := range keys {
+		if strings.Contains(text, k) {
 			return true
 		}
 	}

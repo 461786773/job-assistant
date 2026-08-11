@@ -131,7 +131,7 @@ func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role 
 		return sess, nil
 	}
 
-	user := fmt.Sprintf(`根据候选人上一答，决定下一问（反表层化追问）。当前第 %d/%d 轮。
+	user := fmt.Sprintf(`根据候选人上一答，严格按「先点评 → 再追问 → 必要时换话题」输出。当前第 %d/%d 轮。
 
 公司：%s 岗位：%s
 【JD】
@@ -144,9 +144,10 @@ func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role 
 输出 JSON：
 {
   "surfaceLevel": true/false,
-  "briefFeedback": "一句话点评（可空）",
-  "question": "下一追问",
-  "intent": "deep_dive|pressure|plan_split|tradeoff"
+  "briefFeedback": "必填：点评上轮回答（哪里好/弱/缺细节），2–4句，犀利但不刻薄",
+  "question": "下一追问（一次只问一个；针对漏洞或切换到下一维度）",
+  "intent": "deep_dive|pressure|plan_split|tradeoff|switch_topic",
+  "switchTopic": true/false
 }`, sess.Round+1, sess.MaxRounds, company, role, truncate(jd, 2000), truncate(resume, 2500), hist)
 
 	raw, err := client.ChatJSON(prompts.InterviewSystem, user)
@@ -160,9 +161,10 @@ func Reply(client *llm.Client, sess *Session, answer, resume, jd, company, role 
 	if err := decodeJSON(raw, &out); err != nil || strings.TrimSpace(out.Question) == "" {
 		out.Question = "刚才这件事情里，你做了哪些取舍？如果只保一个目标，你放弃了什么？为什么？"
 	}
-	if strings.TrimSpace(out.BriefFeedback) != "" {
-		sess.Messages = append(sess.Messages, ChatMsg{Role: "coach", Content: out.BriefFeedback})
+	if strings.TrimSpace(out.BriefFeedback) == "" {
+		out.BriefFeedback = "方向听得见，但还偏口号。接下来请落到数字、取舍和你本人做了什么。"
 	}
+	sess.Messages = append(sess.Messages, ChatMsg{Role: "coach", Content: out.BriefFeedback})
 	sess.Messages = append(sess.Messages, ChatMsg{Role: "interviewer", Content: out.Question})
 	sess.Round++
 	return sess, nil

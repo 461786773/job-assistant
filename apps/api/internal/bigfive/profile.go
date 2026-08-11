@@ -2,15 +2,16 @@
 package bigfive
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 )
 
-const Version = "v1"
+const Version = "v1.4"
 
-// Answers q1..q12，取值 1–5。
+// Answers q1..q15，取值 1–5；每维 3 题（O1–3, C4–6, E7–9, A10–12, N13–15）。
 type Answers struct {
 	Q1  int `json:"q1"`
 	Q2  int `json:"q2"`
@@ -24,6 +25,9 @@ type Answers struct {
 	Q10 int `json:"q10"`
 	Q11 int `json:"q11"`
 	Q12 int `json:"q12"`
+	Q13 int `json:"q13"`
+	Q14 int `json:"q14"`
+	Q15 int `json:"q15"`
 }
 
 type DimScore struct {
@@ -61,7 +65,10 @@ var dimLabel = map[string]string{
 }
 
 func (a Answers) rawSlice() []int {
-	return []int{a.Q1, a.Q2, a.Q3, a.Q4, a.Q5, a.Q6, a.Q7, a.Q8, a.Q9, a.Q10, a.Q11, a.Q12}
+	return []int{
+		a.Q1, a.Q2, a.Q3, a.Q4, a.Q5, a.Q6, a.Q7, a.Q8, a.Q9,
+		a.Q10, a.Q11, a.Q12, a.Q13, a.Q14, a.Q15,
+	}
 }
 
 func Validate(a Answers) error {
@@ -107,24 +114,27 @@ func Build(a Answers) (ProfileResult, error) {
 		return ProfileResult{}, err
 	}
 	s1 := scoreItem(a.Q1, false)
-	s2 := scoreItem(a.Q2, true)
-	s3 := scoreItem(a.Q3, false)
+	s2 := scoreItem(a.Q2, false)
+	s3 := scoreItem(a.Q3, true)
 	s4 := scoreItem(a.Q4, false)
-	s5 := scoreItem(a.Q5, true)
-	s6 := scoreItem(a.Q6, false)
-	s7 := scoreItem(a.Q7, true)
+	s5 := scoreItem(a.Q5, false)
+	s6 := scoreItem(a.Q6, true)
+	s7 := scoreItem(a.Q7, false)
 	s8 := scoreItem(a.Q8, false)
 	s9 := scoreItem(a.Q9, true)
 	s10 := scoreItem(a.Q10, false)
 	s11 := scoreItem(a.Q11, false)
 	s12 := scoreItem(a.Q12, true)
+	s13 := scoreItem(a.Q13, false)
+	s14 := scoreItem(a.Q14, false)
+	s15 := scoreItem(a.Q15, true)
 
 	scores := Scores{
-		Openness:          dim((s1 + s2) / 2),
-		Conscientiousness: dim((s3 + s4 + s5) / 3),
-		Extraversion:      dim((s6 + s7) / 2),
-		Agreeableness:     dim((s8 + s9) / 2),
-		Neuroticism:       dim((s10 + s11 + s12) / 3),
+		Openness:          dim((s1 + s2 + s3) / 3),
+		Conscientiousness: dim((s4 + s5 + s6) / 3),
+		Extraversion:      dim((s7 + s8 + s9) / 3),
+		Agreeableness:     dim((s10 + s11 + s12) / 3),
+		Neuroticism:       dim((s13 + s14 + s15) / 3),
 	}
 	means := map[string]float64{
 		"O": scores.Openness.Mean,
@@ -139,7 +149,7 @@ func Build(a Answers) (ProfileResult, error) {
 	personaID, title, blurb, body := pickPersona(scores, means)
 	tags := pickTags(scores)
 	hints := pickHints(scores)
-	summary := FormatForCoach(title, blurb, scores, tags, hints)
+	summary := FormatForCoach(title, blurb, body, scores, tags, hints)
 
 	return ProfileResult{
 		Version:      Version,
@@ -213,90 +223,300 @@ func isMidOrHigh(b string) bool {
 	return b == "mid" || b == "high"
 }
 
+// softHigh / softLow：相对极值也算「突出」，避免多数题选 3 时人人落到平庸单维人设。
+func softHigh(means map[string]float64, code string) bool {
+	mx := maxMean(means)
+	v := means[code]
+	return v >= 3.2 && v >= mx-0.45
+}
+
+func softLow(means map[string]float64, code string) bool {
+	mn := minMean(means)
+	v := means[code]
+	return v <= 2.9 && v <= mn+0.45
+}
+
+func maxMean(means map[string]float64) float64 {
+	mx := -1.0
+	for _, k := range dimOrder {
+		if means[k] > mx {
+			mx = means[k]
+		}
+	}
+	return mx
+}
+
+func minMean(means map[string]float64) float64 {
+	mn := 99.0
+	for _, k := range dimOrder {
+		if means[k] < mn {
+			mn = means[k]
+		}
+	}
+	return mn
+}
+
 func pickPersona(scores Scores, means map[string]float64) (id, title, blurb, body string) {
-	// 组合人设优先（更具体）；body 为给用户看的温暖描写，不做五维点名清单
+	hi := func(code string) bool {
+		return isHigh(band(scores, code)) || softHigh(means, code)
+	}
+	lo := func(code string) bool {
+		return isLow(band(scores, code)) || softLow(means, code)
+	}
+	// 组合人设优先：职场冲突感更强，避免「开朗/靠谱」式空标签
 	combos := []struct {
-		id, title, blurb, body string
-		ok                     func() bool
+		id string
+		ok func() bool
 	}{
-		{"bridge_builder", "会议室润滑剂", "你一进场，火药味都像被调小了一格。",
-			"你习惯先把人接住，再把事往前推。会场里有你在，大家更容易听见彼此，而不是只听见立场。",
-			func() bool { return isHigh(band(scores, "A")) && isHigh(band(scores, "E")) }},
-		{"quiet_architect", "幕后架构师", "话不多，但版本计划和风险清单常常是你默默补齐的。",
-			"你不太抢话筒，却常在关键处把缝补上。独处时想得更清楚，交付前那份踏实，多半来自你提前铺好的路。",
-			func() bool { return isHigh(band(scores, "C")) && isLow(band(scores, "E")) }},
-		{"storm_pilot", "高压领航员", "你会紧张，但紧张时常被你翻译成检查清单。",
-			"压力会先抵达你的身体，但你很少停在原地发慌——更常把它拆成下一步、再下一步。紧的时候，反而更清醒。",
-			func() bool { return isHigh(band(scores, "N")) && isHigh(band(scores, "C")) }},
-		{"bold_challenger", "当场拆弹手", "场面冷了你敢开口，问题脏了你敢点名。",
-			"你不怕把难听的话说清楚。场面僵住时，往往是你先把真正的问题拎到桌面上——锋利，但常能推进。",
-			func() bool { return isLow(band(scores, "A")) && isHigh(band(scores, "E")) }},
-		{"curious_migrator", "跨界翻译官", "你总能把旧经验讲成新岗位听得懂的语言。",
-			"换赛道、换岗位时，你不太会死磕「我从前怎么做」，更愿意问「这边听得懂哪一句」。旧履历在你嘴里，常常能长出新接口。",
-			func() bool { return isHigh(band(scores, "O")) && isMidOrHigh(band(scores, "C")) }},
-		{"steady_anchor", "定海神针", "别人还在晃，你已经在问「下一步谁做、何时完」。",
-			"热闹里你不太容易跟着晃。别人还在交换情绪时，你已经在找可落地的那一步——谁做、何时完、怎样算完。",
-			func() bool { return isLow(band(scores, "N")) && isHigh(band(scores, "C")) }},
-		{"empath_radar", "情绪雷达站", "你对氛围很敏感——既是超能力，也容易过载。",
-			"屋里刚变沉默，你往往比别人先察觉。这让你很会照顾关系，也容易把别人的天气当成自己的天气。记得留一点回血的空隙。",
-			func() bool { return isHigh(band(scores, "A")) && isHigh(band(scores, "N")) }},
-		{"solo_craftsman", "独处工匠", "最好的方案，往往在你戴上耳机之后出现。",
-			"灵感不太爱在嘈杂里露脸。给你一段安静，你更能把散落的线索织成能用的方案——不是不合群，是充电方式不同。",
-			func() bool { return isLow(band(scores, "E")) && isHigh(band(scores, "O")) }},
-		{"flexible_firefighter", "机动救火员", "计划改了三次你也能上场，现场感拉满。",
-			"计划翻车时，你反而容易进状态。临场反应快，现场感强；要是再给自己留一点「先喘口气再冲」的余地，会更持久。",
-			func() bool { return isLow(band(scores, "C")) && isHigh(band(scores, "E")) }},
-		{"principled_editor", "严格审稿人", "你要的是对齐标准，不是和稀泥的「大家都好」。",
-			"你对「差不多就行」过敏。对齐标准、把关质量，是你安心的方式；偶尔也练习一下——观点可以硬，关系不必撕破。",
-			func() bool { return isLow(band(scores, "A")) && isHigh(band(scores, "C")) }},
+		{"bridge_builder", func() bool { return hi("A") && hi("E") }},
+		{"quiet_architect", func() bool { return hi("C") && lo("E") }},
+		{"storm_pilot", func() bool { return hi("N") && hi("C") }},
+		{"bold_challenger", func() bool { return lo("A") && hi("E") }},
+		{"curious_migrator", func() bool { return hi("O") && (hi("C") || isMidOrHigh(band(scores, "C"))) }},
+		{"steady_anchor", func() bool { return lo("N") && hi("C") }},
+		{"empath_radar", func() bool { return hi("A") && hi("N") }},
+		{"solo_craftsman", func() bool { return lo("E") && hi("O") }},
+		{"flexible_firefighter", func() bool { return lo("C") && hi("E") }},
+		{"principled_editor", func() bool { return lo("A") && hi("C") }},
+		{"guarded_analyst", func() bool { return lo("E") && hi("N") }},
+		{"warm_pragmatist", func() bool { return hi("A") && hi("C") }},
+		{"restless_scout", func() bool { return hi("O") && hi("E") }},
+		{"iron_gatekeeper", func() bool { return hi("C") && lo("O") }},
 	}
 	for _, c := range combos {
 		if c.ok() {
-			return c.id, c.title, c.blurb, c.body
+			return lookupPersona(c.id)
 		}
 	}
 
-	top := "O"
-	if len(scores.TopDims) > 0 {
-		top = scores.TopDims[0]
+	top1, top2 := "C", "O"
+	if len(scores.TopDims) >= 1 {
+		top1 = scores.TopDims[0]
 	}
-	_ = means
-	singles := map[string][4]string{
-		"O": {"open_explorer", "新地图测绘员", "未知区域对你来说更像副本入口，不像障碍。",
-			"新事物不太吓到你，反而像多了一扇可推的门。你愿意先摸一摸，再决定要不要走——好奇心是你的燃料。"},
-		"C": {"reliable_closer", "收尾必胜组", "「做完」比「做过」更让你有安全感。",
-			"你在意的不是热闹开场，是能不能体面收尾。清单、节点、跟进——这些小事叠起来，就是别人说的「靠谱」。"},
-		"E": {"social_spark", "场上点火器", "冷场三秒，你已经在找那个能接话的人。",
-			"你容易把场子暖起来。对齐、推进、把冷空气变成对话——你习惯站在「先动起来」的那一边。"},
-		"A": {"harmony_keeper", "共识收纳盒", "你习惯先把人接住，再把事放进去。",
-			"冲突来时，你常先找彼此还站得住的共同点。关系被你看得很重；也记得，照顾别人之前，给自己留一句真心话。"},
-		"N": {"deep_feeler", "内心气象台", "你比别人更早收到「要变天」的信号。",
-			"你对压力和气氛更敏感，信号来得早。这不是脆弱，是天线更长——学会区分「事实」和「脑子里的电影」，会轻松许多。"},
+	if len(scores.TopDims) >= 2 {
+		top2 = scores.TopDims[1]
 	}
-	s := singles[top]
-	return s[0], s[1], s[2], s[3]
+	if id, ok := dualPersonaID(top1, top2); ok {
+		return lookupPersona(id)
+	}
+
+	singles := map[string]string{
+		"O": "open_explorer", "C": "reliable_closer", "E": "social_spark",
+		"A": "harmony_keeper", "N": "deep_feeler",
+	}
+	return lookupPersona(singles[top1])
+}
+
+func dualPersonaID(a, b string) (string, bool) {
+	key := a + b
+	if a > b {
+		key = b + a
+	}
+	table := map[string]string{
+		"AC": "warm_pragmatist",
+		"AN": "empath_radar",
+		"AE": "bridge_builder",
+		"AO": "gentle_inventor",
+		"CN": "storm_pilot",
+		"CE": "stage_pm",
+		"CO": "curious_migrator",
+		"EN": "visible_voltage",
+		"EO": "restless_scout",
+		"NO": "night_mapper",
+	}
+	id, ok := table[key]
+	return id, ok
+}
+
+type personaCopy struct {
+	title, blurb, edge, shadow string
+}
+
+func lookupPersona(id string) (pid, title, blurb, body string) {
+	p, ok := personaCatalog[id]
+	if !ok {
+		p = personaCatalog["reliable_closer"]
+		id = "reliable_closer"
+	}
+	return id, p.title, p.blurb, composePersonaBody(p)
+}
+
+func composePersonaBody(p personaCopy) string {
+	return "双刃：" + strings.TrimSpace(p.edge) + "\n\n硬伤：" + strings.TrimSpace(p.shadow)
+}
+
+// 人设文案库：禁止纯表扬；标题抓眼；短句带刺；正文 = 双刃面 + 硬伤。
+var personaCatalog = map[string]personaCopy{
+	"bridge_builder": {
+		"人形灭火器",
+		"你会场一坐，火药味降两度——账单却记在你情绪账户上。",
+		"你把对立翻译成「还能谈」的议题，场面要破局时别人看你。短板是：你常把别人的火先吞进自己肚子，散会了还在复盘「我是不是说重了」。",
+		"润滑剂的耗材是你自己。冲突散了你未必散得了；讨好式灭火练久了，真心话会越来越晚出口。",
+	},
+	"quiet_architect": {
+		"隐形总控",
+		"话筒不在你手里，坑却常是你默默填的——然后功劳漂走。",
+		"你不抢舞台，关键缝里把路铺好、风险表写上。代价是贡献太干净：容易被当成背景板，邀功不会时，成果归嗓门更大的人。",
+		"「默默靠谱」换不来曝光。不学会把贡献说出口，你的价值只会在别人简历里显影。",
+	},
+	"storm_pilot": {
+		"焦虑发动机",
+		"你不是不怕，是把紧张硬焊成清单——再拿加班证明「我还能行」。",
+		"高压下你拆步骤、盯节点、先做最脏的活，团队靠这股绷着的推进力过关。问题是你分不清「必要紧张」和「自我鞭打」。",
+		"松下来身体才讨债。预警被你当燃料烧，烧穿前你还以为自己很强。",
+	},
+	"bold_challenger": {
+		"当场拆弹手",
+		"场面冷了你敢开口，问题脏了你敢点名——也敢把人得罪干净。",
+		"你能把真问题拎上桌，锋利、短、有效；僵局常因你一句难听话松动。同时，直球会在人心里存档成「刺头」。",
+		"观点赢了、关系裂了，是最贵的账单。缺缓冲话术时，你付双倍：事情成了，同盟没了。",
+	},
+	"curious_migrator": {
+		"履历变形金刚",
+		"旧经验到你嘴里总能接新接口——也容易被怀疑只会讲故事。",
+		"换赛道你先问「这边听哪一句」，迁移叙事是武器。日常则容易被贴「想太多 / 不安分」；点子多、锚点少时，可信度掉得很快。",
+		"故事讲得漂亮，落地跟不上，人设就从「能迁移」滑成「会包装」。收口比开脑洞更考验你。",
+	},
+	"steady_anchor": {
+		"情绪绝缘体",
+		"别人还在晃，你已经在问谁做、何时完——然后被默认你永远不累。",
+		"热闹里你不跟着抖，能把混乱压成下一步。短板是稳会被误读成「不懂人 / 容量无限」；你少说需求，别人就加码。",
+		"绝缘太久，连自己的信号也收不到。不会喊疼时，定盘星会先裂开。",
+	},
+	"empath_radar": {
+		"人形气压计",
+		"屋里刚变沉默你就察觉——接着过载，睡眠来结账。",
+		"你读空气准，会接尴尬、顾关系。超能力的电费从你精力里扣：别人的天气变成你的天气，边界一松就全场内耗代偿。",
+		"敏感≠深度。不练边界，你只是团队的免费情绪污水处理厂。",
+	},
+	"solo_craftsman": {
+		"耳机里的军师",
+		"好方案爱等你戴上耳机——群聊里你却像失踪人口。",
+		"嘈杂里你掉帧，安静里能出深水活。短板刺眼：沉默被读成不配合，不曝光进度时，存在感会被活活饿死。",
+		"深水输出救不了「没人知道你在干嘛」。不主动同步，你再强也像黑箱。",
+	},
+	"flexible_firefighter": {
+		"救火成瘾者",
+		"计划改三次你也能冲——可怕的是你开始离不开火。",
+		"翻车现场你状态拉满：临场快、能把崩盘拽回来。靠救火证明价值久了，会慢慢不会「无着做」；没火发慌，有火透支。",
+		"英雄时刻很爽，可持续性很差。火一灭，你的价值叙事也会空一截。",
+	},
+	"principled_editor": {
+		"质量原教旨",
+		"你要标准对齐，不要和稀泥——也因此常被写成「难搞」。",
+		"你对「差不多」过敏，砍水分、把关口，是交付站得住的原因。同时标准一硬、面子一薄，对事严厉会滑成对人刺痛。",
+		"正确但孤立，是最惨的胜利。不会把标准翻译成人听得懂的「为什么」，你就只剩杠点。",
+	},
+	"guarded_analyst": {
+		"会前三剧本",
+		"你开口前已演完翻车版——慢热常被骂成犹豫。",
+		"你不爱即兴，推演完再说话，踩坑少。被催时若硬装流畅反而露馅；你缺的是「我需要思考窗」的声明，不是能力。",
+		"过度预演会吃掉行动窗口。剧本写到第三版还不出手，分析就成了拖延的高定外套。",
+	},
+	"warm_pragmatist": {
+		"双肩挑死人",
+		"人要留住、事要做成——两头都想赢，两头都在抽你的血。",
+		"你很少只讲情怀或只讲 KPI，安慰人时已在想下一步。代价是不敢排优先级时，温柔变成自我剥削，最后被两头压扁。",
+		"「我都可以」是最高级的陷阱。不会说不，你就不是桥梁，是桥面裂缝。",
+	},
+	"restless_scout": {
+		"情报饥渴症",
+		"新东西你都想先摸——侦察没有收队，就叫分心。",
+		"你开地图快、前线感强，探路值钱。热情一散焦点，别人只看见到处点火、少见收官；新鲜感撤退后剩半成品。",
+		"好奇心若不配截止日期，就是组织里的干扰源。先定「探到什么算收工」。",
+	},
+	"iron_gatekeeper": {
+		"红线人形立牌",
+		"你先问风险再问机会——也常被嫌挡路。",
+		"合规、不可回滚的坑，你竖警戒线早，少踩雷是沉默功劳。只说「不行」不说「保大家走更远」，你会变成阻力符号，创新场里先被开火。",
+		"守门若不带替代路径，就只是挡路。红线要配「怎么绕、怎么降级」，否则没人听。",
+	},
+	"gentle_inventor": {
+		"温水创新派",
+		"你推新前先摸别人怕不怕——很少砸场，也很少炸穿。",
+		"创新像推窗：阻力小，因为你把「怕」接住了。太顾感受时点子磨成无棱；缺成功标准，温柔创新 = 温吞无结果。",
+		"怕得罪人就会得罪进度。创新需要可验的一刀，不是永远的「我们再看看」。",
+	},
+	"stage_pm": {
+		"台上项目官",
+		"场上带着走、会后钉节点——表演和交付你都想拿，电费也双倍。",
+		"对外撑场、对内收口，你像会走路的看板。「表演推进」耗电高；分不清场上人设和真实容量时，会后崩盘只是时间问题。",
+		"掌声不是续航。下场不回血，项目官会先变成项目事故。",
+	},
+	"visible_voltage": {
+		"明线高电压",
+		"场上有电，私下跳闸——硬撑「我很好」时烧毁是真的。",
+		"推进力外显、能点着冷场，别人靠你带节奏。会后回放脑更吵；电压装出来的时候，账单从睡眠和脾气里扣。",
+		"亮着不等于健康。不会关灯休息，你就只是一根即将熔断的保险丝。",
+	},
+	"night_mapper": {
+		"凌晨制图员",
+		"压力一大你就重画地图——常常画到睡不着，还以为自己在努力。",
+		"焦虑能推你找新解法，危机感变重构动力。若不拆「事实 / 担心」，地图全是鬼影；用思考麻痹行动，越想越空转。",
+		"脑子加班≠工作推进。凌晨制图若不落地成白天三步，就只是昂贵的失眠。",
+	},
+	"open_explorer": {
+		"新坑试吃员",
+		"未知像副本——也像永远吃不完、从不买单的试吃盘。",
+		"你敢先摸再决定，破冰试错时值钱。探索无收口就是点子很多、落地很少；新鲜感一撤，半成品和白眼留下。",
+		"好奇心要配「试完怎么收」。否则你不是探索者，是半成品制造商。",
+	},
+	"reliable_closer": {
+		"收尾强迫症",
+		"「做过」安慰不了你，只有「做完」能——然后没人问你累不累。",
+		"清单、节点、跟进叠出靠谱，别人睡得着常因默认有你收尾。你把一切扛完，换来「怎么不早说累」；不会喊停，靠谱会累死你。",
+		"收尾型人格最容易变成组织的免费保险。保险没有保费声明，理赔的是你的健康。",
+	},
+	"social_spark": {
+		"冷场灭霸",
+		"冷场三秒你就去找接话人——会后才发现自己账户透支了。",
+		"你能把空气变成对话，场上推进快。热闹是透支账户；不坦白回血需求，你会用下一场热闹掩盖这一场的空。",
+		"社交高光很上瘾。戒不掉「我来救场」，你就练不会真正的休息。",
+	},
+	"harmony_keeper": {
+		"共识讨好债",
+		"你先接人再放事——共识成了，委屈进账了。",
+		"冲突里找共同点，关系场当缓冲垫，少撕破脸常有你的份。代价是真心话排不到队，变成好好先生/女士：表面和谐，内里一笔讨好债。",
+		"和谐若靠你单方面吞刺，那不叫团队健康，叫你个人负债。",
+	},
+	"deep_feeler": {
+		"全天候警报器",
+		"你更早收到「要变天」——也更难关掉误报。",
+		"天线长，压力信号来得早，准的时候能帮团队躲坑。事实与「脑子里的电影」一糊，敏感就从雷达变成全天警报，内耗刷屏。",
+		"感受多不是深度本身。不练「标注哪些是事实」，你只是一台关不掉的报警器。",
+	},
 }
 
 // BodyForPersona 按人设返回用户可见描写（用于回看页刷新旧版生硬文案）。
 func BodyForPersona(personaID string) string {
-	bodies := map[string]string{
-		"bridge_builder":        "你习惯先把人接住，再把事往前推。会场里有你在，大家更容易听见彼此，而不是只听见立场。",
-		"quiet_architect":       "你不太抢话筒，却常在关键处把缝补上。独处时想得更清楚，交付前那份踏实，多半来自你提前铺好的路。",
-		"storm_pilot":           "压力会先抵达你的身体，但你很少停在原地发慌——更常把它拆成下一步、再下一步。紧的时候，反而更清醒。",
-		"bold_challenger":       "你不怕把难听的话说清楚。场面僵住时，往往是你先把真正的问题拎到桌面上——锋利，但常能推进。",
-		"curious_migrator":      "换赛道、换岗位时，你不太会死磕「我从前怎么做」，更愿意问「这边听得懂哪一句」。旧履历在你嘴里，常常能长出新接口。",
-		"steady_anchor":         "热闹里你不太容易跟着晃。别人还在交换情绪时，你已经在找可落地的那一步——谁做、何时完、怎样算完。",
-		"empath_radar":          "屋里刚变沉默，你往往比别人先察觉。这让你很会照顾关系，也容易把别人的天气当成自己的天气。记得留一点回血的空隙。",
-		"solo_craftsman":        "灵感不太爱在嘈杂里露脸。给你一段安静，你更能把散落的线索织成能用的方案——不是不合群，是充电方式不同。",
-		"flexible_firefighter":  "计划翻车时，你反而容易进状态。临场反应快，现场感强；要是再给自己留一点「先喘口气再冲」的余地，会更持久。",
-		"principled_editor":     "你对「差不多就行」过敏。对齐标准、把关质量，是你安心的方式；偶尔也练习一下——观点可以硬，关系不必撕破。",
-		"open_explorer":         "新事物不太吓到你，反而像多了一扇可推的门。你愿意先摸一摸，再决定要不要走——好奇心是你的燃料。",
-		"reliable_closer":       "你在意的不是热闹开场，是能不能体面收尾。清单、节点、跟进——这些小事叠起来，就是别人说的「靠谱」。",
-		"social_spark":          "你容易把场子暖起来。对齐、推进、把冷空气变成对话——你习惯站在「先动起来」的那一边。",
-		"harmony_keeper":        "冲突来时，你常先找彼此还站得住的共同点。关系被你看得很重；也记得，照顾别人之前，给自己留一句真心话。",
-		"deep_feeler":           "你对压力和气氛更敏感，信号来得早。这不是脆弱，是天线更长——学会区分「事实」和「脑子里的电影」，会轻松许多。",
+	p, ok := personaCatalog[personaID]
+	if !ok {
+		return ""
 	}
-	return bodies[personaID]
+	return composePersonaBody(p)
+}
+
+// TitleBlurbForPersona 回看页刷新标题/短句（旧档也可升级文案）。
+func TitleBlurbForPersona(personaID string) (title, blurb string) {
+	p, ok := personaCatalog[personaID]
+	if !ok {
+		return "", ""
+	}
+	return p.title, p.blurb
+}
+
+// ShadowForPersona 硬伤短句（结果页 / 教练上下文可单独引用）。
+func ShadowForPersona(personaID string) string {
+	p, ok := personaCatalog[personaID]
+	if !ok {
+		return ""
+	}
+	return p.shadow
+}
+
+// TagsForScores 按五维档位刷新标签（回看旧档可升级代价向文案）。
+func TagsForScores(scores Scores) []string {
+	return pickTags(scores)
 }
 
 func pickTags(scores Scores) []string {
@@ -322,59 +542,59 @@ func pickTags(scores Scores) []string {
 
 	switch scores.Openness.Band {
 	case "high":
-		add("#灵感捕手", "#愿意改方案", "#迁移叙事有素材")
+		add("#新坑试吃", "#收口困难户")
 	case "low":
-		add("#稳扎稳打", "#少折腾派")
+		add("#路径依赖户", "#创新过敏体质")
 	}
 	switch scores.Conscientiousness.Band {
 	case "high":
-		add("#靠谱收尾", "#清单体质", "#简历好改型")
+		add("#收尾强迫", "#不喊停会死")
 	case "low":
-		add("#即兴选手", "#反流程侠")
+		add("#救火成瘾", "#无火就慌")
 	}
 	switch scores.Extraversion.Band {
 	case "high":
-		add("#场上发光", "#对齐推进器")
+		add("#场上带电", "#会后空账")
 	case "low":
-		add("#深水静音", "#会后充电", "#一对一比群聊更在状态")
+		add("#深水黑箱", "#存在感易饿死")
 	}
 	switch scores.Agreeableness.Band {
 	case "high":
-		add("#关系优先", "#温和说服")
+		add("#讨好债户", "#边界漏风")
 	case "low":
-		add("#直球表达", "#标准对齐", "#冲突场需要话术缓冲")
+		add("#直球伤人", "#正确但孤立")
 	}
 	switch scores.Neuroticism.Band {
 	case "high":
-		add("#敏感天线", "#会后复盘脑", "#述职前要热身")
+		add("#会后复盘脑", "#误报刷屏")
 	case "low":
-		add("#情绪稳盘", "#抗压缓冲")
+		add("#情绪绝缘", "#被当永动机")
 	}
 
 	if isHigh(scores.Conscientiousness.Band) && isHigh(scores.Neuroticism.Band) {
-		add("#焦虑转化为行动")
+		add("#焦虑当燃料")
 	}
 	if isHigh(scores.Conscientiousness.Band) && isLow(scores.Neuroticism.Band) {
-		add("#稳如交付日")
+		add("#稳到被透支")
 	}
 	if isHigh(scores.Extraversion.Band) && isHigh(scores.Agreeableness.Band) {
-		add("#空气清新剂")
+		add("#灭火耗材本人")
 	}
 	if isLow(scores.Extraversion.Band) && isHigh(scores.Agreeableness.Band) {
-		add("#小范围深同盟")
+		add("#小圈讨好仓")
 	}
 	if isHigh(scores.Openness.Band) && isLow(scores.Extraversion.Band) {
-		add("#独自开地图")
+		add("#耳机方案、群聊失踪")
 	}
 	if isLow(scores.Agreeableness.Band) && isHigh(scores.Conscientiousness.Band) {
-		add("#质量守门员")
+		add("#质量原教旨")
 	}
 	if isHigh(scores.Openness.Band) && isHigh(scores.Agreeableness.Band) {
-		add("#温和创新者")
+		add("#温吞创新风险")
 	}
 	if scores.Openness.Band == "mid" && scores.Conscientiousness.Band == "mid" &&
 		scores.Extraversion.Band == "mid" && scores.Agreeableness.Band == "mid" && scores.Neuroticism.Band == "mid" {
-		add("#弹性适应体", "#尚未显影")
+		add("#尚未显影", "#别用中庸骗自己")
 	}
 
 	if len(tags) > 6 {
@@ -427,9 +647,12 @@ func bandCN(b string) string {
 }
 
 // FormatForCoach 生成注入教练会话的摘要。
-func FormatForCoach(title, blurb string, scores Scores, tags, hints []string) string {
+func FormatForCoach(title, blurb, body string, scores Scores, tags, hints []string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("职场画像：%s——%s\n", title, blurb))
+	b.WriteString(fmt.Sprintf("人设：%s——%s\n", title, blurb))
+	if strings.TrimSpace(body) != "" {
+		b.WriteString(strings.TrimSpace(body) + "\n")
+	}
 	b.WriteString(fmt.Sprintf("五维：O%.1f(%s) C%.1f(%s) E%.1f(%s) A%.1f(%s) N%.1f(%s)\n",
 		scores.Openness.Mean, bandCN(scores.Openness.Band),
 		scores.Conscientiousness.Mean, bandCN(scores.Conscientiousness.Band),
@@ -446,6 +669,22 @@ func FormatForCoach(title, blurb string, scores Scores, tags, hints []string) st
 			b.WriteString("- " + h + "\n")
 		}
 	}
-	b.WriteString("边界：风格参考，禁止诊断病名，禁止当作录用判断。")
+	b.WriteString("边界：风格参考（含双刃与硬伤），禁止诊断病名，禁止当作录用判断。")
 	return b.String()
+}
+
+// SummaryForCoachLive 按当前文案库重算教练摘要（旧档注入时不依赖过期 SummaryForCoach）。
+func SummaryForCoachLive(personaID string, scoresJSON json.RawMessage) string {
+	title, blurb := TitleBlurbForPersona(personaID)
+	body := BodyForPersona(personaID)
+	if title == "" && body == "" {
+		return ""
+	}
+	var scores Scores
+	if len(scoresJSON) > 0 {
+		_ = json.Unmarshal(scoresJSON, &scores)
+	}
+	tags := TagsForScores(scores)
+	hints := pickHints(scores)
+	return FormatForCoach(title, blurb, body, scores, tags, hints)
 }

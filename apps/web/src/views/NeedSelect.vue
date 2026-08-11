@@ -47,7 +47,7 @@ const busy = ref(false)
 const error = ref('')
 
 const primaryCta = computed(() => {
-  if (selected.value === 'unsure') return '好，陪我找找卡在哪'
+  if (selected.value === 'unsure') return '好，回工作台慢慢找'
   if (selected.value === 'counsel_first') return '好，先把心安下来'
   return '好，开始聊'
 })
@@ -79,6 +79,11 @@ async function confirm() {
   try {
     await api.setPrimaryNeed(selected.value)
     clearProfileCache()
+    // 产品方案 §0.5-B：unsure → 回工作台并聚焦「想聊聊吗」
+    if (selected.value === 'unsure') {
+      await router.replace({ path: '/home', query: { focus: 'talk' } })
+      return
+    }
     await startCoach(coachSceneForNeed(selected.value))
   } catch (e) {
     error.value = e.message || '没带过去，请再试一次'

@@ -21,6 +21,7 @@ type CoachSession struct {
 	Messages      []CoachMessage `json:"messages"`
 	ActionItems   []string       `json:"actionItems"`
 	Scripts       []string       `json:"scripts"`
+	SuggestGate   string         `json:"suggestGate,omitempty"` // hr | interview | salary
 	CrisisFlag    bool           `json:"crisisFlag"`
 	Status        string         `json:"status"` // active | done
 	CreatedAt     string         `json:"createdAt"`
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS coach_sessions (
   messages TEXT,
   action_items TEXT,
   scripts TEXT,
+  suggest_gate TEXT NOT NULL DEFAULT '',
   crisis_flag INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL,
@@ -75,8 +77,10 @@ CREATE TABLE IF NOT EXISTS quick_self_checks (
 );
 CREATE INDEX IF NOT EXISTS idx_quick_checks_user_at ON quick_self_checks(user_id, at);
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return s.ensureColumn("coach_sessions", "suggest_gate", "TEXT NOT NULL DEFAULT ''")
 }
 
 func (s *Store) ListCoachSessions(userID string, limit int) ([]CoachSession, error) {
@@ -85,7 +89,7 @@ func (s *Store) ListCoachSessions(userID string, limit int) ([]CoachSession, err
 	}
 	rows, err := s.db.Query(`
 SELECT id, user_id, scene, title, related_task_id, related_event, messages, action_items, scripts,
-       crisis_flag, status, created_at, updated_at
+       suggest_gate, crisis_flag, status, created_at, updated_at
 FROM coach_sessions WHERE user_id = ?
 ORDER BY updated_at DESC LIMIT ?`, userID, limit)
 	if err != nil {
@@ -106,7 +110,7 @@ ORDER BY updated_at DESC LIMIT ?`, userID, limit)
 func (s *Store) GetCoachSession(id, userID string) (*CoachSession, error) {
 	row := s.db.QueryRow(`
 SELECT id, user_id, scene, title, related_task_id, related_event, messages, action_items, scripts,
-       crisis_flag, status, created_at, updated_at
+       suggest_gate, crisis_flag, status, created_at, updated_at
 FROM coach_sessions WHERE id = ? AND user_id = ?`, id, userID)
 	sess, err := scanCoach(row)
 	if err == sql.ErrNoRows {
@@ -122,11 +126,11 @@ func (s *Store) CreateCoachSession(sess *CoachSession) error {
 	_, err := s.db.Exec(`
 INSERT INTO coach_sessions (
   id, user_id, scene, title, related_task_id, related_event, messages, action_items, scripts,
-  crisis_flag, status, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  suggest_gate, crisis_flag, status, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sess.ID, sess.UserID, sess.Scene, sess.Title, sess.RelatedTaskID, sess.RelatedEvent,
 		mustJSON(sess.Messages), mustJSON(sess.ActionItems), mustJSON(sess.Scripts),
-		boolInt(sess.CrisisFlag), sess.Status, sess.CreatedAt, sess.UpdatedAt,
+		sess.SuggestGate, boolInt(sess.CrisisFlag), sess.Status, sess.CreatedAt, sess.UpdatedAt,
 	)
 	return err
 }
@@ -135,10 +139,10 @@ func (s *Store) UpdateCoachSession(sess *CoachSession) error {
 	res, err := s.db.Exec(`
 UPDATE coach_sessions SET
   scene = ?, title = ?, related_task_id = ?, related_event = ?, messages = ?,
-  action_items = ?, scripts = ?, crisis_flag = ?, status = ?, updated_at = ?
+  action_items = ?, scripts = ?, suggest_gate = ?, crisis_flag = ?, status = ?, updated_at = ?
 WHERE id = ? AND user_id = ?`,
 		sess.Scene, sess.Title, sess.RelatedTaskID, sess.RelatedEvent, mustJSON(sess.Messages),
-		mustJSON(sess.ActionItems), mustJSON(sess.Scripts), boolInt(sess.CrisisFlag), sess.Status, sess.UpdatedAt,
+		mustJSON(sess.ActionItems), mustJSON(sess.Scripts), sess.SuggestGate, boolInt(sess.CrisisFlag), sess.Status, sess.UpdatedAt,
 		sess.ID, sess.UserID,
 	)
 	if err != nil {
@@ -169,7 +173,7 @@ func scanCoach(sc rowScanner) (CoachSession, error) {
 	var crisis int
 	err := sc.Scan(
 		&sess.ID, &sess.UserID, &sess.Scene, &sess.Title, &sess.RelatedTaskID, &sess.RelatedEvent,
-		&messages, &actions, &scripts, &crisis, &sess.Status, &sess.CreatedAt, &sess.UpdatedAt,
+		&messages, &actions, &scripts, &sess.SuggestGate, &crisis, &sess.Status, &sess.CreatedAt, &sess.UpdatedAt,
 	)
 	if err != nil {
 		return CoachSession{}, err

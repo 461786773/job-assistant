@@ -188,11 +188,17 @@ func FormatSummary(ans Answers, m Metrics, analysis AIAnalysis) string {
 	if len(ans.Stressors) > 0 {
 		b.WriteString("压力源：" + strings.Join(ans.Stressors, "、") + "\n")
 	}
+	if len(ans.MoodTags) > 0 {
+		b.WriteString("情绪标签：" + strings.Join(ans.MoodTags, "、") + "\n")
+	}
 	if len(ans.Goals) > 0 {
 		b.WriteString("期望：" + strings.Join(ans.Goals, "、") + "\n")
 	}
 	if strings.TrimSpace(ans.FreeTextBlockers) != "" {
 		b.WriteString("最卡住：" + strings.TrimSpace(ans.FreeTextBlockers) + "\n")
+	}
+	if strings.TrimSpace(ans.FreeTextOther) != "" {
+		b.WriteString("补充：" + strings.TrimSpace(ans.FreeTextOther) + "\n")
 	}
 	b.WriteString("危机标记：" + ans.CrisisLevel + "\n")
 	b.WriteString("AI摘要：" + analysis.Headline)

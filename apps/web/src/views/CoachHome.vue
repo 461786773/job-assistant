@@ -8,7 +8,7 @@
 
     <p v-if="error" class="error">{{ error }}</p>
 
-    <!-- 画像置顶；详细评估不在此与认真聊门禁并排重复 -->
+    <!-- 画像置顶；详细评估软邀请（不挡聊天） -->
     <section class="home-know reveal reveal-delay-1">
       <h2 class="home-know-title">先让我多懂你一点</h2>
       <div class="know-list">
@@ -30,6 +30,15 @@
               看看
             </router-link>
             <router-link v-else to="/bigfive">测一下</router-link>
+          </div>
+        </div>
+        <div v-if="!profileLoading && profile && !profile.hasInitialAssessment" class="know-row">
+          <div class="know-row-main">
+            <strong>想让我更懂一点现在的你吗？</strong>
+            <span class="know-row-desc">大约几分钟；也可以稍后再说。不做，也能先聊。</span>
+          </div>
+          <div class="know-row-actions">
+            <router-link to="/onboarding/assessment">好，我想被更好地理解</router-link>
           </div>
         </div>
       </div>

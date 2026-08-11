@@ -106,7 +106,7 @@ func (h *Handler) CreateBigFive(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, rec)
 }
 
-// sanitizeBigFiveForClient 去掉教练侧提示，并刷新用户可见描写。
+// sanitizeBigFiveForClient 去掉教练侧提示，并刷新用户可见描写与标签。
 func sanitizeBigFiveForClient(p *db.WorkplaceBigFiveProfile) {
 	if p == nil {
 		return
@@ -115,5 +115,15 @@ func sanitizeBigFiveForClient(p *db.WorkplaceBigFiveProfile) {
 	p.SummaryForCoach = ""
 	if body := bigfive.BodyForPersona(p.PersonaID); body != "" {
 		p.PersonaBody = body
+	}
+	if title, blurb := bigfive.TitleBlurbForPersona(p.PersonaID); title != "" {
+		p.PersonaTitle = title
+		p.PersonaBlurb = blurb
+	}
+	var scores bigfive.Scores
+	if len(p.Scores) > 0 && json.Unmarshal(p.Scores, &scores) == nil {
+		if tags := bigfive.TagsForScores(scores); len(tags) > 0 {
+			p.Tags = tags
+		}
 	}
 }
