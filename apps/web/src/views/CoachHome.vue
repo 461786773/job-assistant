@@ -116,7 +116,7 @@
         <template v-if="summaryLoading">最近状态我看看…</template>
         <template v-else-if="summary?.checkInCount7">
           近一周你留下了 {{ summary.checkInCount7 }} 笔，压力大约 {{ formatAvg(summary.avgStress7) }}。
-          <router-link to="/wellbeing">看看记录</router-link>
+          <router-link to="/wellbeing/quick">先记一笔</router-link>
           <span class="dot">·</span>
           <router-link to="/assessments">我的记录</router-link>
         </template>
@@ -140,31 +140,10 @@
             <span class="know-row-desc">人事、业务、谈薪——想把「下一句」练熟时再进。</span>
           </div>
           <div class="know-row-actions">
-            <router-link to="/tasks/new">准备一份</router-link>
+            <router-link to="/tasks">进去看看</router-link>
           </div>
         </div>
       </div>
-      <p v-if="tasksLoading" class="muted practice-empty">看看…</p>
-      <template v-else-if="tasks.length">
-        <div class="practice-list">
-          <router-link
-            v-for="t in tasks.slice(0, 3)"
-            :key="t.id"
-            :to="`/tasks/${t.id}`"
-            class="practice-item"
-          >
-            <span>{{ t.title || '未命名练习' }}</span>
-            <span class="muted">{{ STATUS_LABEL[t.status] || t.status }}</span>
-          </router-link>
-        </div>
-        <p class="aside-links practice-more">
-          <router-link to="/tasks">看看练习室</router-link>
-        </p>
-      </template>
-      <p v-else class="muted practice-empty">
-        还没有投递练习。
-        <router-link to="/tasks">看看练习室</router-link>
-      </p>
     </section>
   </section>
 </template>
@@ -178,7 +157,6 @@ import {
   NEED_LABEL,
   NEED_OPTIONS,
   SCENE_LABEL,
-  STATUS_LABEL,
 } from '../api'
 import { clearProfileCache } from '../router'
 
@@ -189,8 +167,6 @@ const starting = ref(false)
 const coachMode = ref(route.query.mode === 'formal' ? 'formal' : 'trial')
 const sessions = ref([])
 const sessionsLoading = ref(true)
-const tasks = ref([])
-const tasksLoading = ref(true)
 const summary = ref(null)
 const summaryLoading = ref(true)
 const profile = ref(null)
@@ -288,22 +264,19 @@ watch(
 
 onMounted(async () => {
   try {
-    const [me, sessData, taskData, checkData] = await Promise.all([
+    const [me, sessData, checkData] = await Promise.all([
       api.me(),
       api.listCoachSessions(),
-      api.listTasks(),
       api.listCheckIns(),
       refreshQuickGate(),
     ])
     profile.value = me
     sessions.value = sessData.items || []
-    tasks.value = taskData.items || []
     summary.value = checkData.summary || null
   } catch (e) {
     error.value = e.message
   } finally {
     sessionsLoading.value = false
-    tasksLoading.value = false
     summaryLoading.value = false
     profileLoading.value = false
   }
