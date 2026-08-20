@@ -89,7 +89,9 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 		})
 	})
 
-	// Serve SPA if dist exists
+	// Serve SPA if dist exists.
+	// Vite hashes /assets/* filenames — cache them forever.
+	// index.html must NOT be cached, or users keep pointing at old hashed bundles after deploy.
 	if info, err := os.Stat(cfg.WebDir); err == nil && info.IsDir() {
 		fileServer := http.FileServer(http.Dir(cfg.WebDir))
 		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
@@ -99,9 +101,11 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 				return
 			}
 			if st, err := os.Stat(path); err == nil && !st.IsDir() {
+				setStaticCacheHeaders(w, req.URL.Path)
 				fileServer.ServeHTTP(w, req)
 				return
 			}
+			setHTMLCacheHeaders(w)
 			http.ServeFile(w, req, filepath.Join(cfg.WebDir, "index.html"))
 		})
 	}
@@ -132,4 +136,25 @@ func writeAuthErr(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"error":` + strconv.Quote(msg) + `}`))
+}
+
+func setHTMLCacheHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+}
+
+func setStaticCacheHeaders(w http.ResponseWriter, urlPath string) {
+	base := filepath.Base(urlPath)
+	if base == "index.html" {
+		setHTMLCacheHeaders(w)
+		return
+	}
+	// Hashed Vite assets under /assets/ are safe to cache long-term.
+	if strings.HasPrefix(urlPath, "/assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	// Other root files (favicon, etc.): short revalidate.
+	w.Header().Set("Cache-Control", "no-cache")
 }
