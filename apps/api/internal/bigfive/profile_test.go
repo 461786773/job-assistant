@@ -27,8 +27,8 @@ func TestBuildScoringAndPersona(t *testing.T) {
 	if p.PersonaID != "quiet_architect" {
 		t.Fatalf("persona=%s want quiet_architect", p.PersonaID)
 	}
-	if p.PersonaBody == "" || !strings.Contains(p.PersonaBody, "硬伤：") {
-		t.Fatalf("body should include 硬伤, got %q", p.PersonaBody)
+	if p.PersonaBody == "" || strings.Contains(p.PersonaBody, "硬伤：") || strings.Contains(p.PersonaBody, "双刃：") {
+		t.Fatalf("body should be one paragraph without 双刃/硬伤 labels, got %q", p.PersonaBody)
 	}
 	if len(p.Tags) == 0 || len(p.CoachHints) == 0 {
 		t.Fatalf("tags/hints empty: %v %v", p.Tags, p.CoachHints)

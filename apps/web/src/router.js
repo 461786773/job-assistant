@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import CoachHome from './views/CoachHome.vue'
 import CoachSession from './views/CoachSession.vue'
-import Wellbeing from './views/Wellbeing.vue'
 import QuickSelfCheck from './views/QuickSelfCheck.vue'
 import Settings from './views/Settings.vue'
 import Workbench from './views/Workbench.vue'
@@ -65,7 +64,7 @@ const router = createRouter({
     { path: '/home', name: 'coach-home', component: CoachHome, meta: { auth: true } },
     { path: '/workbench', redirect: '/home' },
     { path: '/coach/:id', name: 'coach-session', component: CoachSession, meta: { auth: true } },
-    { path: '/wellbeing', name: 'wellbeing', component: Wellbeing, meta: { auth: true } },
+    { path: '/wellbeing', redirect: '/assessments' },
     { path: '/wellbeing/quick', name: 'quick-self-check', component: QuickSelfCheck, meta: { auth: true } },
     { path: '/settings', name: 'settings', component: Settings, meta: { auth: true } },
     { path: '/tasks', name: 'tasks', component: Workbench, meta: { auth: true } },
@@ -98,12 +97,7 @@ router.beforeEach(async (to) => {
   if (to.meta.guest && loggedIn) {
     const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : ''
     if (redirect) return redirect
-    try {
-      const me = await loadProfile()
-      return postLoginPath(me)
-    } catch {
-      return '/home'
-    }
+    return postLoginPath()
   }
   return true
 })

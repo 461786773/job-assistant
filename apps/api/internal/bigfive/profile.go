@@ -342,10 +342,19 @@ func lookupPersona(id string) (pid, title, blurb, body string) {
 }
 
 func composePersonaBody(p personaCopy) string {
-	return "双刃：" + strings.TrimSpace(p.edge) + "\n\n硬伤：" + strings.TrimSpace(p.shadow)
+	edge := strings.TrimSpace(p.edge)
+	shadow := strings.TrimSpace(p.shadow)
+	if edge == "" {
+		return shadow
+	}
+	if shadow == "" {
+		return edge
+	}
+	// 一段合写：锋利面 + 代价，禁止「双刃：/硬伤：」分栏标题（问卷 §5.3）
+	return edge + " " + shadow
 }
 
-// 人设文案库：禁止纯表扬；标题抓眼；短句带刺；正文 = 双刃面 + 硬伤。
+// 人设文案库：禁止纯表扬；标题抓眼；短句带刺；正文 = 一段合写（锋利面与代价）。
 var personaCatalog = map[string]personaCopy{
 	"bridge_builder": {
 		"人形灭火器",
@@ -669,7 +678,7 @@ func FormatForCoach(title, blurb, body string, scores Scores, tags, hints []stri
 			b.WriteString("- " + h + "\n")
 		}
 	}
-	b.WriteString("边界：风格参考（含双刃与硬伤），禁止诊断病名，禁止当作录用判断。")
+	b.WriteString("边界：风格参考（锋利面与代价揉在一段描写里），禁止诊断病名，禁止当作录用判断。")
 	return b.String()
 }
 

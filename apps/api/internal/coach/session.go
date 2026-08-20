@@ -10,9 +10,6 @@ import (
 	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
-// CrisisHelpText 兼容旧引用；正文见 prompts.CrisisHelp。
-const CrisisHelpText = prompts.CrisisHelp
-
 var sceneLabel = map[string]string{
 	"job_search":    "求职 / 跳槽",
 	"promotion":     "晋升 / 述职",
@@ -41,7 +38,7 @@ func MergeUserProfile(bigFiveHint, assessmentHint, quickHint string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return strings.Join(parts, "\n\n") + "\n\n合读说明：画像看协作与压力习惯，心理评估（基线）看近两周压力与卡住点，快照看此刻状态。三者描述同一个人，须合在一起用；禁止诊断病名，禁止只引用其中一块。"
+	return strings.Join(parts, "\n\n") + "\n\n" + prompts.CoachMergeNote
 }
 
 func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessmentHint, bigFiveHint, primaryNeed string) (*db.CoachSession, error) {
@@ -63,11 +60,10 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
 关联事件：%s
 关联任务摘要：%s
 
-【用户综合档案】（画像 + 评估 + 自评，必须合读）
+【用户综合档案】（职场画像 + 心理评估/基线 + 快照，有则合读）
 %s
 
-请给出开场：合读档案后自然接住用户（禁止诊断病名；不要分别背诵两套材料），邀请用户用 2–3 句补充「发生了什么」。
-若困扰分≥8 或评测危机偏高，语气放缓并轻提示专业支持 / 预约通道。
+%s
 输出 JSON：
 {
   "reply":"教练开场",
@@ -75,7 +71,7 @@ func Start(client *llm.Client, scene, relatedEvent, taskHint, quickHint, assessm
   "scripts":[],
   "crisisFlag":false,
   "suggestGate":""
-}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200))
+}`, scene, SceneLabel(scene), primaryNeed, relatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200), prompts.CoachStartTurn)
 		raw, err := client.ChatJSON(prompts.CoachSystem, user)
 		if err == nil {
 			var out struct {
@@ -106,7 +102,7 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint, profil
 	if detectCrisis(userText) {
 		sess.CrisisFlag = true
 		sess.Status = "done"
-		sess.Messages = append(sess.Messages, db.CoachMessage{Role: "coach", Content: CrisisHelpText})
+		sess.Messages = append(sess.Messages, db.CoachMessage{Role: "coach", Content: prompts.CrisisHelp})
 		return sess, nil
 	}
 
@@ -119,18 +115,13 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint, profil
 关联事件：%s
 关联任务摘要：%s
 
-【用户综合档案】（画像 + 评估 + 自评，必须合读，每轮都要参考）
+【用户综合档案】（职场画像 + 心理评估/基线 + 快照，有则合读，每轮都要参考）
 %s
 
 【对话】
 %s
 
-请按此顺序写 reply：
-1) 若用户本轮有情绪/疲惫/压力：第一句必须共情（具体点出心理层面的感受，勿空泛「辛苦了」）；
-2) 结合综合档案调整接话方式与侧重点（画像定节奏，评估定压力与目标），勿把两套资料割裂；
-3) 再澄清事实 vs 自我评判，或命名情绪与需求；
-4) 再给 1–3 个选项，并收束到一个 24h 动作（可选附「下一句怎么说」）。
-若需要过关训练，suggestGate 填 hr|interview|salary，否则空字符串。
+%s
 输出 JSON：
 {
   "reply":"教练回复（有情绪时必须以共情句开头）",
@@ -139,7 +130,7 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint, profil
   "crisisFlag":false,
   "suggestGate":"",
   "done":false
-}`, sess.Scene, sess.RelatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200), hist)
+}`, sess.Scene, sess.RelatedEvent, truncate(taskHint, 800), truncate(profileCtx, 2200), hist, prompts.CoachReplyTurn)
 
 	raw, err := client.ChatJSON(prompts.CoachSystem, user)
 	if err != nil {
@@ -159,7 +150,7 @@ func Reply(client *llm.Client, sess *db.CoachSession, userText, taskHint, profil
 	if out.CrisisFlag {
 		sess.CrisisFlag = true
 		sess.Status = "done"
-		sess.Messages = append(sess.Messages, db.CoachMessage{Role: "coach", Content: CrisisHelpText})
+		sess.Messages = append(sess.Messages, db.CoachMessage{Role: "coach", Content: prompts.CrisisHelp})
 		return sess, nil
 	}
 	sess.Messages = append(sess.Messages, db.CoachMessage{Role: "coach", Content: out.Reply})
@@ -193,14 +184,14 @@ func heuristicOpening(scene, event, profileCtx string) string {
 		base += fmt.Sprintf("你提到和「%s」有关。", event)
 	}
 	if strings.TrimSpace(profileCtx) != "" {
-		base += "\n\n我这边已经把你的职场画像和评估放在一起看了（风格参考，不是诊断）。"
+		base += prompts.CoachHeuristicSawProfile
 		if strings.Contains(profileCtx, "困扰分 8") || strings.Contains(profileCtx, "困扰分 9") || strings.Contains(profileCtx, "困扰分 10") {
-			base += "你现在的困扰分偏高。我们可以先把步子放慢；若持续很难受，也可预约私人心理辅导通道——我这边是职场教练，不能替代诊疗。"
+			base += prompts.CoachHeuristicHighDistress
 		}
-		base += "\n\n想先补充一两句：最近具体发生了什么？还是直接从「今天想带走的那一点」聊起？"
+		base += prompts.CoachHeuristicAskMore
 		return base
 	}
-	return base + "可以先用两三句话告诉我：刚才实际发生了什么？以及你此刻最卡住的一个感受是什么？（我会帮你把事实和自我评判拆开。）"
+	return base + prompts.CoachHeuristicNoProfile
 }
 
 var feelingLabel = map[string]string{

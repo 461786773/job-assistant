@@ -104,6 +104,7 @@ func Analyze(client *llm.Client, ans Answers) (Metrics, AIAnalysis, string, erro
 				if ans.CrisisLevel == "elevated" {
 					out.Crisis = true
 				}
+				applyUserFacingCopy(&out, ans.CrisisLevel == "elevated")
 				analysis = out
 				summary = FormatSummary(ans, m, analysis)
 			}
@@ -157,7 +158,7 @@ func heuristicAnalysis(ans Answers, m Metrics) AIAnalysis {
 	if m.EmotionLoad >= 3.5 && ans.B4 >= 4 {
 		headline = fmt.Sprintf("近两周压力与自我否定感偏高，当前更适合先从「%s」的教练疏导开始，把评判和可改进点拆开。", scene)
 	}
-	steps := []string{"先开一次 AI 心理疏导，澄清事实与自我评判", "用「花三分钟看看自己」看见状态变化"}
+	steps := []string{"先开一次 AI 心理疏导，澄清事实与自我评判", "在关键节点用「花三分钟看看自己」留下此刻记录"}
 	if m.SuggestedNeed == "job_search" {
 		steps = append(steps, "需要过关时再进入人事 / 业务 / 谈薪训练")
 	} else if m.SuggestedNeed == "promotion" || m.SuggestedNeed == "communication" {
@@ -168,14 +169,14 @@ func heuristicAnalysis(ans Answers, m Metrics) AIAnalysis {
 	}
 	crisis := ans.CrisisLevel == "elevated"
 	if crisis {
-		headline = "你标出了需要被认真对待的痛苦信号。建议优先寻求专业或紧急支持；产品内职场教练不适合处理危机时刻。"
-		steps = []string{"查看危机求助资源并联系身边可信的人", "确认已知晓资源后，再考虑非危机向的陪伴与疏导"}
+		headline = prompts.AssessmentCrisisHeadline
+		steps = append([]string{}, prompts.AssessmentCrisisSteps...)
 	}
 	return AIAnalysis{
 		Headline:       headline,
 		SuggestedScene: m.SuggestedScene,
 		NextSteps:      steps,
-		BoundaryNote:   "本评估用于自我觉察与教练个性化，不是心理诊断，也不能替代持证咨询或精神科诊疗。",
+		BoundaryNote:   prompts.AssessmentBoundaryNote,
 		Crisis:         crisis,
 	}
 }
@@ -203,6 +204,21 @@ func FormatSummary(ans Answers, m Metrics, analysis AIAnalysis) string {
 	b.WriteString("危机标记：" + ans.CrisisLevel + "\n")
 	b.WriteString("AI摘要：" + analysis.Headline)
 	return b.String()
+}
+
+func applyUserFacingCopy(out *AIAnalysis, crisis bool) {
+	if out == nil {
+		return
+	}
+	if strings.TrimSpace(out.BoundaryNote) == "" {
+		out.BoundaryNote = prompts.AssessmentBoundaryNote
+	}
+	if crisis {
+		out.Crisis = true
+		out.Headline = prompts.AssessmentCrisisHeadline
+		out.NextSteps = append([]string{}, prompts.AssessmentCrisisSteps...)
+		out.BoundaryNote = prompts.AssessmentBoundaryNote
+	}
 }
 
 func sceneLabelOr(s string) string {

@@ -5,7 +5,14 @@
       <p v-if="profile">
         你更像「{{ profile.personaTitle }}」——{{ profile.personaBlurb }}
       </p>
+      <p v-else class="muted">职场风格速写，不是诊断。</p>
     </div>
+
+    <GuideNote v-if="!loading && profile" title="画像会怎么用">
+      <p>
+        之后和教练聊天时，我会参考这份画像来调语气与节奏。若再补心理评估或此刻记录，接住你时会更完整。
+      </p>
+    </GuideNote>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="muted">加载中…</p>
@@ -14,16 +21,7 @@
       <section class="panel bigfive-persona">
         <p class="persona-title">{{ profile.personaTitle }}</p>
         <p class="persona-hook">{{ profile.personaBlurb }}</p>
-        <div class="persona-split">
-          <div class="persona-block">
-            <span class="persona-kicker">双刃</span>
-            <p>{{ personaParts.edge }}</p>
-          </div>
-          <div class="persona-block persona-block-shadow" v-if="personaParts.shadow">
-            <span class="persona-kicker">硬伤</span>
-            <p>{{ personaParts.shadow }}</p>
-          </div>
-        </div>
+        <p class="persona-body">{{ personaBodyText }}</p>
         <div class="tag-cloud" v-if="profile.tags?.length">
           <span v-for="t in profile.tags" :key="t" class="tag-pill">{{ t }}</span>
         </div>
@@ -61,7 +59,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api'
+import { api, coachSceneForNeed } from '../api'
+import GuideNote from '../components/GuideNote.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,6 +68,7 @@ const loading = ref(true)
 const starting = ref(false)
 const error = ref('')
 const profile = ref(null)
+const preferredScene = ref('job_search')
 
 const DIM_META = [
   { key: 'openness', label: '开放性 O' },
@@ -92,31 +92,15 @@ const dims = computed(() => {
   })
 })
 
-const personaParts = computed(() => {
-  const body = String(profile.value?.personaBody || '').trim()
-  if (!body) {
-    return { edge: profile.value?.personaBlurb || '', shadow: '' }
-  }
-  const marker = '\n\n硬伤：'
-  const idx = body.indexOf(marker)
-  if (idx >= 0) {
-    let edge = body.slice(0, idx).trim()
-    if (edge.startsWith('双刃：')) edge = edge.slice('双刃：'.length).trim()
-    return {
-      edge,
-      shadow: body.slice(idx + marker.length).trim(),
-    }
-  }
-  const alt = body.indexOf('硬伤：')
-  if (alt >= 0) {
-    let edge = body.slice(0, alt).trim()
-    if (edge.startsWith('双刃：')) edge = edge.slice('双刃：'.length).trim()
-    return {
-      edge,
-      shadow: body.slice(alt + '硬伤：'.length).trim(),
-    }
-  }
-  return { edge: body, shadow: '' }
+/** 一段合写：去掉「双刃：/硬伤：」分栏标题，锋利面与代价揉进同一段 */
+const personaBodyText = computed(() => {
+  const raw = String(profile.value?.personaBody || '').trim()
+  if (!raw) return profile.value?.personaBlurb || ''
+  return raw
+    .replace(/^双刃[：:]\s*/m, '')
+    .replace(/\n+硬伤[：:]\s*/m, '\n\n')
+    .replace(/硬伤[：:]\s*/g, '')
+    .trim()
 })
 
 function parseScores(raw) {
@@ -140,12 +124,17 @@ async function startTalk() {
   error.value = ''
   try {
     const sess = await api.createCoachSession({
-      scene: 'job_search',
+      scene: preferredScene.value,
       mode: 'trial',
       skipQuickGate: true,
     })
     await router.push(`/coach/${sess.id}`)
   } catch (e) {
+    if (e.code === 'crisis_elevated') {
+      error.value = e.message
+      await router.push({ path: '/booking', query: { crisis: '1' } })
+      return
+    }
     error.value = e.message
   } finally {
     starting.value = false
@@ -155,11 +144,12 @@ async function startTalk() {
 onMounted(async () => {
   try {
     const id = route.params.id
-    if (id) {
-      profile.value = await api.getBigFive(id)
-    } else {
-      profile.value = await api.latestBigFive()
-    }
+    const [bf, me] = await Promise.all([
+      id ? api.getBigFive(id) : api.latestBigFive(),
+      api.me().catch(() => null),
+    ])
+    profile.value = bf
+    preferredScene.value = coachSceneForNeed(me?.primaryNeed || me?.suggestedNeed || 'job_search')
   } catch (e) {
     error.value = e.message
   } finally {
@@ -175,32 +165,13 @@ onMounted(async () => {
   line-height: 1.45;
   color: var(--text, #1c241f);
 }
-.persona-split {
-  display: grid;
-  gap: 10px;
-}
-.persona-block {
-  padding: 12px 14px;
+.persona-body {
+  margin: 0 0 14px;
+  padding: 16px 16px 18px;
+  min-height: 7.5rem;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-2, #eef3ef) 80%, transparent);
-}
-.persona-block p {
-  margin: 6px 0 0;
-  line-height: 1.55;
-}
-.persona-block-shadow {
-  background: color-mix(in srgb, #c45c3e 10%, var(--surface, #fff));
-  border: 1px solid color-mix(in srgb, #c45c3e 28%, transparent);
-}
-.persona-kicker {
-  display: inline-block;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted, #66726a);
-  font-weight: 600;
-}
-.persona-block-shadow .persona-kicker {
-  color: #a3472e;
+  line-height: 1.65;
+  white-space: pre-line;
 }
 </style>

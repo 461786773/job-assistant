@@ -3,62 +3,25 @@
     <header class="home-greet reveal">
       <p class="home-brand-line">求职助手 · 职场心理教练</p>
       <h1 class="home-hello">{{ greeting }}</h1>
-      <p class="home-lead">想先随便看看，或直接说一件卡住的事，都可以。</p>
+      <p class="home-lead">想说一件卡住的事，点下面就行。</p>
     </header>
 
     <p v-if="error" class="error">{{ error }}</p>
 
-    <!-- 画像 + 心理评估（一体入口，基线禁止失踪） -->
-    <section class="home-know reveal reveal-delay-1">
-      <h2 class="home-know-title">先让我多懂你一点</h2>
-      <div class="know-list">
-        <div class="know-row">
-          <div class="know-row-main">
-            <strong>职场画像</strong>
-            <span class="know-row-desc">
-              <template v-if="profile?.hasBigFiveProfile">
-                你更像「{{ profile.bigFivePersonaTitle }}」——随时可以带着它去聊。
-              </template>
-              <template v-else>两三分钟的趣味小像，不做诊断，也不挡着你去聊。</template>
-            </span>
-          </div>
-          <div class="know-row-actions">
-            <router-link
-              v-if="profile?.hasBigFiveProfile"
-              :to="`/bigfive/${profile.latestBigFiveId}`"
-            >
-              看看
-            </router-link>
-            <router-link v-else to="/bigfive">测一下</router-link>
-          </div>
-        </div>
-        <div class="know-row">
-          <div class="know-row-main">
-            <strong>心理评估</strong>
-            <span class="know-row-desc">
-              <template v-if="profile?.hasInitialAssessment">
-                你已经有一份底了。若近况变了，可以重新评估一下。
-              </template>
-              <template v-else>
-                想让我更懂一点现在的你吗？大约几分钟；也可以稍后再说。不做，也能先聊。
-              </template>
-            </span>
-          </div>
-          <div class="know-row-actions">
-            <template v-if="profile?.hasInitialAssessment">
-              <router-link to="/onboarding/assessment">重新评估一下</router-link>
-            </template>
-            <template v-else>
-              <router-link to="/onboarding/assessment">好，我想被更好地理解</router-link>
-              <span class="muted">·</span>
-              <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>
-            </template>
-          </div>
-        </div>
-      </div>
-    </section>
+    <div v-if="crisisElevated" class="crisis-banner reveal">
+      <p>{{ crisisHelp }}</p>
+      <p style="margin-top: 10px">
+        当前心理评估标出了需要被认真对待的信号，不宜继续常规 AI 陪聊。
+        <router-link to="/booking">去预约私教</router-link>
+      </p>
+    </div>
 
-    <section id="talk" class="home-talk reveal reveal-delay-2" :class="{ 'home-talk-focus': focusTalk }">
+    <section
+      v-if="!crisisElevated"
+      id="talk"
+      class="home-talk reveal reveal-delay-1"
+      :class="{ 'home-talk-focus': focusTalk }"
+    >
       <div class="home-talk-head">
         <h2>想聊聊吗</h2>
         <div class="mode-toggle">
@@ -83,22 +46,29 @@
         <div class="formal-gate">
           <template v-if="hasRecentQuick">
             <p>
-              今天你已经看过自己一眼了——点下面任意一句，我们可以接着聊；想换个说法再记一笔也可以。
+              今天你已经留下过此刻记录——可以直接开聊；想换个说法再记一笔也可以。
             </p>
             <div class="formal-gate-actions">
-              <span class="muted">沿用今天的</span>
-              <router-link
+              <button
                 class="formal-gate-cta"
+                type="button"
+                :disabled="starting"
+                @click="startWithTodaySnapshot"
+              >
+                {{ starting ? '正在开门…' : '用今天的记录开聊' }}
+              </button>
+              <router-link
+                class="btn btn-ghost btn-sm"
                 :to="{ path: '/wellbeing/quick', query: { next: 'coach', mode: 'formal' } }"
               >
-                再看一眼自己
+                再测此刻
               </router-link>
             </div>
           </template>
           <template v-else>
             <p>
               <strong>认真聊之前，想先邀你花三分钟看看自己。</strong>
-              不是考试，只是让我更接得住你；轻松聊聊可以跳过。
+              这条此刻记录会进入本轮对话；轻松聊聊可以跳过。
             </p>
             <div class="formal-gate-actions">
               <router-link
@@ -107,12 +77,14 @@
               >
                 好，先看看自己
               </router-link>
-              <span class="muted">做完后再点下面；或直接点，我会带你过去。</span>
+              <span class="muted">做完后再点下面；或直接点场景，我会带你过去。</span>
             </div>
           </template>
         </div>
       </template>
-      <p v-else class="home-mode-hint muted">轻松聊聊不用先填表，点一句就开始。</p>
+      <p v-else class="home-mode-hint muted">
+        轻松聊聊不用先填表。若你已有画像或评估，我仍会带上它们一起听。
+      </p>
 
       <div class="scene-list" role="list">
         <button
@@ -131,54 +103,103 @@
           <span class="scene-row-action">聊</span>
         </button>
       </div>
-
-      <p class="talk-resume">
-        <template v-if="sessionsLoading">上次聊到哪了，我看看…</template>
-        <template v-else-if="sessions.length">
-          上次我们聊到
-          <router-link :to="`/coach/${sessions[0].id}`">
-            {{ sessions[0].title || NEED_LABEL[sessions[0].scene] || SCENE_LABEL[sessions[0].scene] || sessions[0].scene }}
-          </router-link>
-          ，也可以从上面另开一句。
-        </template>
-        <template v-else>还没有开过场。准备好了，点上面任意一句就行。</template>
-      </p>
     </section>
 
-    <section class="home-aside reveal reveal-delay-3">
-      <p class="aside-status">
-        <template v-if="summaryLoading">最近状态我看看…</template>
-        <template v-else-if="snapshotSummary.count7">
-          近一周你留下了 {{ snapshotSummary.count7 }} 笔，心里大约 {{ formatAvg(snapshotSummary.avg7) }}/10。
-          <router-link to="/wellbeing/quick">再看一眼自己</router-link>
-          <span class="dot">·</span>
-          <router-link to="/assessments">我的评估</router-link>
-        </template>
-        <template v-else>
-          最近还没有留下什么。
-          <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>
-          <span class="dot">·</span>
-          <router-link to="/assessments">我的评估</router-link>
-        </template>
-      </p>
-      <p class="aside-links">
-        <router-link to="/booking">预约私教</router-link>
-      </p>
+    <!-- P1-1 会话列表 -->
+    <section class="home-sessions reveal reveal-delay-2">
+      <h2 class="home-know-title">最近聊过</h2>
+      <p v-if="sessionsLoading" class="muted">上次聊到哪了，我看看…</p>
+      <template v-else-if="sessions.length">
+        <ul class="session-list">
+          <li v-for="s in sessions.slice(0, 8)" :key="s.id">
+            <router-link :to="`/coach/${s.id}`" class="session-list-main">
+              <strong>{{ sessionTitle(s) }}</strong>
+              <span class="muted">{{ formatTime(s.updatedAt || s.createdAt) }}</span>
+            </router-link>
+            <button
+              class="btn btn-ghost btn-sm"
+              type="button"
+              :disabled="deletingId === s.id"
+              @click="removeSession(s.id)"
+            >
+              删除
+            </button>
+          </li>
+        </ul>
+      </template>
+      <p v-else class="muted">还没有开过场。准备好了，点上面任意一句就行。</p>
     </section>
 
-    <section class="practice-room reveal reveal-delay-4">
+    <details class="home-materials reveal reveal-delay-3">
+      <summary>让对话更贴你</summary>
+      <p class="muted home-materials-lead">
+        有哪项用哪项，缺了也能聊。完整回看在
+        <router-link to="/assessments">我的</router-link>。
+      </p>
       <div class="know-list">
         <div class="know-row">
           <div class="know-row-main">
-            <strong>求职练习室</strong>
-            <span class="know-row-desc">人事、业务、谈薪——想把「下一句」练熟时再进。</span>
+            <strong>职场画像</strong>
+            <span class="know-row-desc">
+              <template v-if="profile?.hasBigFiveProfile">
+                你更像「{{ profile.bigFivePersonaTitle }}」
+              </template>
+              <template v-else>两三分钟小像，用来调接话节奏。</template>
+            </span>
           </div>
           <div class="know-row-actions">
-            <router-link to="/tasks">进去看看</router-link>
+            <router-link
+              v-if="profile?.hasBigFiveProfile"
+              :to="`/bigfive/${profile.latestBigFiveId}`"
+            >
+              看看
+            </router-link>
+            <router-link v-else to="/bigfive">测一下</router-link>
+          </div>
+        </div>
+        <div class="know-row">
+          <div class="know-row-main">
+            <strong>心理评估</strong>
+            <span class="know-row-desc">
+              <template v-if="profile?.hasInitialAssessment">已有一份底，近况变了可以更新。</template>
+              <template v-else>场景与期望；想被更深接住时再做。</template>
+            </span>
+          </div>
+          <div class="know-row-actions">
+            <router-link v-if="profile?.hasInitialAssessment" to="/onboarding/assessment">
+              重新评估一下
+            </router-link>
+            <router-link v-else to="/onboarding/assessment">去做</router-link>
+          </div>
+        </div>
+        <div class="know-row">
+          <div class="know-row-main">
+            <strong>此刻记录</strong>
+            <span class="know-row-desc">
+              <template v-if="hasRecentQuick">今天已经留过一笔。</template>
+              <template v-else>认真聊前会用到；轻松聊聊可以跳过。</template>
+            </span>
+          </div>
+          <div class="know-row-actions">
+            <router-link to="/wellbeing/quick">再测此刻</router-link>
           </div>
         </div>
       </div>
-    </section>
+    </details>
+
+    <div class="home-more reveal reveal-delay-4">
+      <p class="home-more-label muted">需要时，走这两条支线</p>
+      <div class="home-more-actions">
+        <router-link class="home-more-card" to="/booking">
+          <strong>预约私教</strong>
+          <span>想找真人聊一轮</span>
+        </router-link>
+        <router-link class="home-more-card" to="/tasks">
+          <strong>练习室</strong>
+          <span>练几道职场小关</span>
+        </router-link>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -192,21 +213,21 @@ import {
   NEED_OPTIONS,
   SCENE_LABEL,
 } from '../api'
+import { crisisHelp } from '../copy'
 import { clearProfileCache } from '../router'
 
 const router = useRouter()
 const route = useRoute()
 const error = ref('')
 const starting = ref(false)
+const deletingId = ref('')
 const coachMode = ref(route.query.mode === 'formal' ? 'formal' : 'trial')
 const sessions = ref([])
 const sessionsLoading = ref(true)
-const summaryLoading = ref(true)
 const profile = ref(null)
-const profileLoading = ref(true)
 const hasRecentQuick = ref(false)
-const snapshotSummary = ref({ count7: 0, avg7: 0 })
 const focusTalk = ref(false)
+const crisisElevated = ref(false)
 
 const talkOptions = computed(() => {
   const need = profile.value?.primaryNeed
@@ -226,9 +247,22 @@ const greeting = computed(() => {
   return '今晚还好吗'
 })
 
-function formatAvg(v) {
-  if (!v) return '—'
-  return Number(v).toFixed(1)
+function formatTime(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return iso
+  }
+}
+
+function sessionTitle(s) {
+  return s.title || NEED_LABEL[s.scene] || SCENE_LABEL[s.scene] || s.scene || '一席对话'
 }
 
 function isRecentQuick(item) {
@@ -236,12 +270,32 @@ function isRecentQuick(item) {
   if (!raw) return false
   const t = Date.parse(raw)
   if (Number.isNaN(t)) return false
+  // 与后端一致：按本地日历日；后端用 Asia/Shanghai，前端用本机时区（国内部署通常一致）
   const a = new Date(t)
   const b = new Date()
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
+function handleCoachError(e, need) {
+  if (e.code === 'crisis_elevated') {
+    crisisElevated.value = true
+    error.value = e.message
+    return router.push({ path: '/booking', query: { crisis: '1' } })
+  }
+  if (e.code === 'quick_check_required' || e.status === 409) {
+    return router.push({
+      path: '/wellbeing/quick',
+      query: { next: 'coach', scene: coachSceneForNeed(need), mode: 'formal' },
+    })
+  }
+  error.value = e.message
+}
+
 async function startFromNeed(need) {
+  if (crisisElevated.value) {
+    error.value = '当前不宜继续常规陪聊，请先查看求助资源或预约私教。'
+    return
+  }
   starting.value = true
   error.value = ''
   try {
@@ -264,16 +318,29 @@ async function startFromNeed(need) {
     })
     await router.push(`/coach/${sess.id}`)
   } catch (e) {
-    if (e.code === 'quick_check_required' || e.status === 409) {
-      await router.push({
-        path: '/wellbeing/quick',
-        query: { next: 'coach', scene: coachSceneForNeed(need), mode: 'formal' },
-      })
-      return
-    }
-    error.value = e.message
+    await handleCoachError(e, need)
   } finally {
     starting.value = false
+  }
+}
+
+/** 沿用今日快照：用推荐诉求或默认场景直接开认真聊 */
+async function startWithTodaySnapshot() {
+  const need = profile.value?.primaryNeed || talkOptions.value[0]?.value || 'job_search'
+  await startFromNeed(need)
+}
+
+async function removeSession(id) {
+  if (!confirm('删除这场对话？')) return
+  deletingId.value = id
+  error.value = ''
+  try {
+    await api.deleteCoachSession(id)
+    sessions.value = sessions.value.filter((s) => s.id !== id)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    deletingId.value = ''
   }
 }
 
@@ -282,19 +349,8 @@ async function refreshQuickGate() {
     const quick = await api.listQuickSelfChecks()
     const items = quick.items || []
     hasRecentQuick.value = items.some(isRecentQuick)
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const weekItems = items.filter((q) => {
-      const t = Date.parse(q.createdAt || q.at || '')
-      return !Number.isNaN(t) && t >= weekAgo
-    })
-    const avg =
-      weekItems.length > 0
-        ? weekItems.reduce((s, q) => s + (Number(q.distressScore) || 0), 0) / weekItems.length
-        : 0
-    snapshotSummary.value = { count7: weekItems.length, avg7: avg }
   } catch {
     hasRecentQuick.value = false
-    snapshotSummary.value = { count7: 0, avg7: 0 }
   }
 }
 
@@ -318,13 +374,12 @@ onMounted(async () => {
       refreshQuickGate(),
     ])
     profile.value = me
+    crisisElevated.value = me?.crisisLevel === 'elevated'
     sessions.value = sessData.items || []
   } catch (e) {
     error.value = e.message
   } finally {
     sessionsLoading.value = false
-    summaryLoading.value = false
-    profileLoading.value = false
   }
 })
 </script>

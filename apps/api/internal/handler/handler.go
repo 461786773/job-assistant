@@ -20,6 +20,7 @@ import (
 	"github.com/zhangyongjie/job-assistant/internal/hr"
 	"github.com/zhangyongjie/job-assistant/internal/interview"
 	"github.com/zhangyongjie/job-assistant/internal/llm"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 	"github.com/zhangyongjie/job-assistant/internal/resume"
 	"github.com/zhangyongjie/job-assistant/internal/salary"
 )
@@ -58,6 +59,10 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 		"role":    "workplace-coach",
 		"llm":     h.LLM != nil && h.LLM.Enabled(),
 	})
+}
+
+func (h *Handler) Copy(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, prompts.PublicCopy())
 }
 
 func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {

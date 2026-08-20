@@ -1,6 +1,13 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import { loadCopy } from './copy'
 import './styles.css'
 
-createApp(App).use(router).mount('#app')
+const app = createApp(App)
+app.use(router)
+loadCopy()
+  .catch(() => {})
+  .finally(() => {
+    app.mount('#app')
+  })

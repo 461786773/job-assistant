@@ -3,7 +3,7 @@
     <div class="hero">
       <h1>这几天还好吗</h1>
       <p>
-        这里是你留下的那些「此刻」连成的样子。想记一笔就
+        这里是你留下的那些「此刻」连成的样子。这些记录也会进入教练对话；想记一笔就
         <router-link to="/wellbeing/quick">花三分钟看看自己</router-link>。
       </p>
     </div>
@@ -46,7 +46,7 @@
       <section class="panel">
         <h2 class="section-title">想被更好地接住时</h2>
         <p class="muted">
-          三分钟是看看此刻；若愿意再多几分钟说说近况和期望，我会更懂你一些。
+          三分钟是对齐此刻；心理评估补场景与期望。两者都会进入之后的疏导，不是两套无关的表。
         </p>
         <div class="row" style="margin-top: 12px; flex-wrap: wrap; gap: 8px">
           <router-link class="btn btn-primary" to="/onboarding/assessment">

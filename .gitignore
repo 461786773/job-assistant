@@ -5,6 +5,8 @@ data/
 .env
 *.db
 .DS_Store
+.cursor/
+design-system/
 apps/api/server
 apps/api/job-assistant
 bin/

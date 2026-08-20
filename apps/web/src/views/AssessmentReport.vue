@@ -2,15 +2,25 @@
   <section>
     <div class="hero">
       <h1>{{ fromOnboarding ? '我看到的你' : '这份评估' }}</h1>
-      <p>描述性摘要与建议路径，不是临床诊断。</p>
+      <p>描述性摘要与建议路径，不是临床诊断。这份底会进入之后的教练对话。</p>
     </div>
+
+    <GuideNote v-if="!loading && item" title="接下来会发生什么">
+      <p>
+        确认诉求或去聊天时，我会带上这份<strong>最新心理评估</strong>；若还有职场画像与此刻记录，会一起合读。
+      </p>
+    </GuideNote>
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="muted">加载中…</p>
 
     <template v-else-if="item">
-      <div v-if="analysis?.crisis || item.crisisLevel === 'elevated'" class="crisis-banner">
-        {{ CRISIS_HELP }}
+      <div v-if="isElevated" class="crisis-banner">
+        {{ crisisHelp }}
+        <p style="margin-top: 10px">
+          此刻不宜继续常规 AI 陪聊。
+          <router-link to="/booking">去预约私教</router-link>
+        </p>
       </div>
 
       <section class="panel">
@@ -30,7 +40,7 @@
         <ul v-if="analysis?.nextSteps?.length" class="plain-list">
           <li v-for="(s, i) in analysis.nextSteps" :key="i">{{ s }}</li>
         </ul>
-        <p class="muted" style="margin-top: 12px">{{ analysis?.boundaryNote || '本评估用于自我觉察与教练个性化，不是心理诊断。' }}</p>
+        <p class="muted" style="margin-top: 12px">{{ analysis?.boundaryNote || assessmentBoundaryNote }}</p>
       </section>
 
       <section class="panel" style="margin-top: 14px">
@@ -51,9 +61,21 @@
         >
           我想清楚要什么了
         </router-link>
-        <router-link v-else class="btn btn-primary" to="/home">先回到安静的一页</router-link>
-        <router-link class="btn btn-ghost" to="/assessments">我的评估</router-link>
-        <router-link class="btn btn-ghost" to="/booking">预约私教</router-link>
+        <button
+          v-else-if="!isElevated"
+          class="btn btn-primary"
+          type="button"
+          :disabled="starting"
+          @click="startTalk"
+        >
+          {{ starting ? '正在开门…' : '带着这份去聊' }}
+        </button>
+        <router-link v-if="isElevated" class="btn btn-primary" to="/booking">预约私教</router-link>
+        <router-link v-if="!fromOnboarding && !isElevated" class="btn btn-ghost" to="/home">
+          先回到安静的一页
+        </router-link>
+        <router-link class="btn btn-ghost" to="/assessments">回到我的</router-link>
+        <router-link v-if="!isElevated" class="btn btn-ghost" to="/booking">预约私教</router-link>
       </div>
     </template>
   </section>
@@ -61,13 +83,17 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { api, CRISIS_HELP, SCENE_LABEL } from '../api'
+import { useRoute, useRouter } from 'vue-router'
+import { api, coachSceneForNeed, SCENE_LABEL } from '../api'
+import { assessmentBoundaryNote, crisisHelp } from '../copy'
+import GuideNote from '../components/GuideNote.vue'
 
 const route = useRoute()
+const router = useRouter()
 const item = ref(null)
 const loading = ref(true)
 const error = ref('')
+const starting = ref(false)
 
 const fromOnboarding = computed(() => route.path.startsWith('/onboarding'))
 
@@ -82,12 +108,42 @@ const analysis = computed(() => {
   }
 })
 
+const isElevated = computed(
+  () => Boolean(analysis.value?.crisis) || item.value?.crisisLevel === 'elevated',
+)
+
 function formatTime(iso) {
   if (!iso) return ''
   try {
     return new Date(iso).toLocaleString('zh-CN')
   } catch {
     return iso
+  }
+}
+
+async function startTalk() {
+  starting.value = true
+  error.value = ''
+  try {
+    const me = await api.me().catch(() => null)
+    const scene = coachSceneForNeed(
+      me?.primaryNeed || analysis.value?.suggestedScene || item.value?.primaryScene || 'job_search',
+    )
+    const sess = await api.createCoachSession({
+      scene,
+      mode: 'trial',
+      skipQuickGate: true,
+    })
+    await router.push(`/coach/${sess.id}`)
+  } catch (e) {
+    if (e.code === 'crisis_elevated') {
+      error.value = e.message
+      await router.push({ path: '/booking', query: { crisis: '1' } })
+      return
+    }
+    error.value = e.message
+  } finally {
+    starting.value = false
   }
 }
 

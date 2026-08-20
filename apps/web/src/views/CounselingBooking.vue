@@ -8,7 +8,9 @@
     <section v-if="!hasAssessment" class="panel soft-banner" style="margin-bottom: 14px">
       <div>
         <strong>想让对方更懂你一点吗？</strong>
-        <p class="muted" style="margin: 6px 0 0">可以先做一份心理评估；也可以边约边补，不会拦住你。</p>
+        <p class="muted" style="margin: 6px 0 0">
+          可先做心理评估（也会用于 AI 教练合读）；也可以边约边补，不会拦住你。
+        </p>
       </div>
       <router-link class="btn btn-ghost btn-sm" to="/onboarding/assessment">好，我想被更好地理解</router-link>
     </section>
@@ -21,10 +23,17 @@
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="route.query.crisis === '1'" class="crisis-banner">{{ crisisHelp }}</p>
+    <p class="muted privacy-line" style="margin-bottom: 12px; font-size: 0.86rem">
+      预约信息仅本人与人工确认方可见 · 非站内诊疗
+    </p>
 
     <div class="coach-home-grid">
       <section class="panel">
         <h2 class="section-title">告诉我方便的时间</h2>
+        <p class="muted" style="margin: 0 0 12px; font-size: 0.86rem">
+          提交后状态为「待确认」，我们人工回复后再改为已确认；你可随时取消。
+        </p>
         <form class="form" @submit.prevent="submit">
           <label>
             时段偏好
@@ -72,9 +81,12 @@
             >
               取消
             </button>
+            <p v-if="b.status === 'requested'" class="muted" style="margin: 6px 0 0; font-size: 0.8rem">
+              待人工确认时段，请稍候
+            </p>
           </li>
         </ul>
-        <p class="muted" style="margin-top: 12px">{{ CRISIS_HELP }}</p>
+        <p class="muted" style="margin-top: 12px">{{ crisisHelp }}</p>
       </section>
     </div>
   </section>
@@ -82,8 +94,11 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { api, BOOKING_STATUS_LABEL, CRISIS_HELP } from '../api'
+import { useRoute } from 'vue-router'
+import { api, BOOKING_STATUS_LABEL } from '../api'
+import { crisisHelp } from '../copy'
 
+const route = useRoute()
 const items = ref([])
 const loading = ref(true)
 const busy = ref(false)

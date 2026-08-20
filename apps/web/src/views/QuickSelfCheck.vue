@@ -3,14 +3,44 @@
     <div class="hero">
       <h1>{{ goCoachNext ? '先花三分钟看看自己' : '花三分钟看看自己' }}</h1>
       <p>
-        <template v-if="goCoachNext">先用三分钟看看自己，再开始，我会更接得住你。做完后若还想被更深接住，也可以再多说几句。</template>
-        <template v-else>没有标准答案，勾最贴近此刻的即可。这会轻轻记在你的状态里。不是临床测评。</template>
+        <template v-if="goCoachNext">
+          先对齐此刻，再开聊——这条记录会进入本轮教练对话。做完后若还想被更深接住，也可以再补心理评估。
+        </template>
+        <template v-else>
+          没有标准答案，勾最贴近此刻的即可。留下的一笔会进入之后的疏导与趋势；不是临床测评。
+        </template>
       </p>
     </div>
 
+    <GuideNote v-if="!saved" title="这一笔怎么用">
+      <p>记下后会进入认真聊的上下文；仅本人可见，不是临床测评，也不是每日打卡。</p>
+    </GuideNote>
+
     <p v-if="error" class="error">{{ error }}</p>
 
-    <template v-if="!saved">
+    <!-- 当日已有快照且要去开聊：主 CTA 沿用今天的 -->
+    <section v-if="!saved && goCoachNext && todayQuick" class="panel soft-banner" style="margin-bottom: 14px">
+      <div>
+        <strong>今天已经看过自己一眼了</strong>
+        <p class="muted" style="margin: 6px 0 0">
+          可以直接用今天的记录开聊；想换个说法也可以再填一份。
+        </p>
+      </div>
+      <div class="row" style="flex-wrap: wrap; gap: 8px">
+        <button
+          class="btn btn-primary"
+          type="button"
+          :disabled="starting"
+          @click="reuseTodayAndCoach"
+        >
+          {{ starting ? '正在开门…' : '用今天的记录开聊' }}
+        </button>
+        <button class="btn btn-ghost" type="button" @click="forceNew = true">再测此刻</button>
+      </div>
+    </section>
+
+    <template v-if="!saved && (!todayQuick || !goCoachNext || forceNew)">
+      <p class="muted privacy-line">仅本人可见 · 非诊断 · 节点记录，非每日强制</p>
       <form class="panel form quick-form" @submit.prevent="submit">
         <fieldset class="tag-fieldset">
           <legend>一、你今天主要是哪种感觉？（不超过 2 项）</legend>
@@ -69,12 +99,12 @@
           <button class="btn btn-primary" type="submit" :disabled="busy">
             {{ busy ? '保存中…' : '好，记下这一刻' }}
           </button>
-          <router-link class="btn btn-ghost" to="/assessments">我的评估</router-link>
+          <router-link class="btn btn-ghost" to="/assessments">回到我的</router-link>
         </div>
       </form>
     </template>
 
-    <template v-else>
+    <template v-else-if="saved">
       <section class="panel">
         <h2 class="section-title">已记下这一刻</h2>
         <p class="muted">下面是你勾选的内容复述（不做诊断）。</p>
@@ -92,7 +122,7 @@
 
         <template v-if="!hasBaseline">
           <h3 class="pane-sub" style="margin-top: 18px">想被更深接住一点吗？</h3>
-          <p class="muted">刚才看的是此刻。若愿意，再花几分钟做一份心理评估，说说近况和期望，之后会更贴你。</p>
+          <p class="muted">刚才看的是此刻。若愿意，再花几分钟做一份心理评估，说说近况和期望——之后聊天会一起参考它们。</p>
           <div class="row" style="margin-top: 12px; flex-wrap: wrap; gap: 10px">
             <router-link
               class="btn btn-primary"
@@ -138,7 +168,7 @@
         </template>
 
         <div class="row" style="margin-top: 14px; flex-wrap: wrap; gap: 10px">
-          <router-link class="btn btn-ghost" to="/wellbeing">看趋势</router-link>
+          <router-link class="btn btn-ghost" to="/assessments">回到我的</router-link>
           <router-link class="btn btn-ghost" to="/home">先回到安静的一页</router-link>
         </div>
       </section>
@@ -151,11 +181,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   api,
+  coachSceneForNeed,
   DURATION_OPTIONS,
   FEELING_OPTIONS,
   IMPACT_OPTIONS,
   TAKEAWAY_OPTIONS,
 } from '../api'
+import GuideNote from '../components/GuideNote.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -164,6 +196,9 @@ const starting = ref(false)
 const error = ref('')
 const saved = ref(null)
 const hasBaseline = ref(true)
+const todayQuick = ref(null)
+const forceNew = ref(false)
+const preferredNeed = ref('')
 
 const pendingScene = computed(() =>
   typeof route.query.scene === 'string' ? route.query.scene : '',
@@ -187,6 +222,14 @@ const scenes = [
 
 function labelOf(options, value) {
   return options.find((o) => o.value === value)?.label || value
+}
+
+function isSameLocalDay(iso) {
+  const t = Date.parse(iso || '')
+  if (Number.isNaN(t)) return false
+  const a = new Date(t)
+  const b = new Date()
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
 const feelingText = computed(() =>
@@ -228,7 +271,6 @@ async function submit() {
       triggerNote: form.triggerNote,
       takeaway: form.takeaway,
     })
-    // 有基线且指定了场景 → 直达会话；无基线则留在结果页引导续做基线
     if (goCoachNext.value && pendingScene.value && hasBaseline.value) {
       await startCoach(pendingScene.value)
     }
@@ -240,30 +282,52 @@ async function submit() {
 }
 
 async function startCoach(scene) {
-  if (!saved.value?.id) return
+  const quickId = saved.value?.id || todayQuick.value?.id
+  if (!quickId) return
   starting.value = true
   error.value = ''
   try {
     const mode = typeof route.query.mode === 'string' ? route.query.mode : 'formal'
     const sess = await api.createCoachSession({
       scene,
-      relatedQuickCheckId: saved.value.id,
+      relatedQuickCheckId: quickId,
       mode,
     })
     router.push(`/coach/${sess.id}`)
   } catch (e) {
+    if (e.code === 'crisis_elevated') {
+      error.value = e.message
+      await router.push({ path: '/booking', query: { crisis: '1' } })
+      return
+    }
     error.value = e.message
   } finally {
     starting.value = false
   }
 }
 
+async function reuseTodayAndCoach() {
+  const scene =
+    pendingScene.value || coachSceneForNeed(preferredNeed.value || 'job_search')
+  saved.value = todayQuick.value
+  await startCoach(scene)
+}
+
 onMounted(async () => {
   try {
-    const me = await api.me()
+    const [me, quick] = await Promise.all([api.me(), api.listQuickSelfChecks()])
     hasBaseline.value = Boolean(me.hasInitialAssessment)
+    preferredNeed.value = me.primaryNeed || me.suggestedNeed || ''
+    if (me.crisisLevel === 'elevated') {
+      error.value = '当前评估标出了需要被认真对待的信号，不宜继续常规 AI 陪聊。'
+      await router.replace({ path: '/booking', query: { crisis: '1' } })
+      return
+    }
+    const items = quick.items || []
+    todayQuick.value = items.find((q) => isSameLocalDay(q.createdAt || q.at)) || null
   } catch {
     hasBaseline.value = true
   }
 })
 </script>
+

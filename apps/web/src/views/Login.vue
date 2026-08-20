@@ -5,7 +5,7 @@
       <p class="welcome-sub reveal reveal-delay-1">职场心理教练</p>
       <h1 class="welcome-title reveal reveal-delay-2">你先坐一会儿。</h1>
       <p class="welcome-lead reveal reveal-delay-3">
-        这里有人听你把话说完。进来后可以先画一张职场小像；不想测，直接去聊也完全可以。
+        这里有人听你把话说完。你可以先做职场画像或心理评估——之后的对话会据此调整；不想测，直接去聊也完全可以。
       </p>
       <form class="welcome-form reveal reveal-delay-4" @submit.prevent="submit">
         <label>
@@ -21,6 +21,9 @@
         <button class="btn btn-primary" type="submit" :disabled="busy">
           {{ busy ? '正在开门…' : '进来坐坐' }}
         </button>
+        <p class="muted privacy-line" style="margin-top: 12px; font-size: 0.86rem">
+          对话与评估仅本人可见 · 非临床诊断
+        </p>
       </form>
     </div>
   </section>
@@ -53,8 +56,7 @@ async function submit() {
       await router.replace(redirect)
       return
     }
-    const me = await api.me().catch(() => null)
-    await router.replace(postLoginPath(me))
+    await router.replace(postLoginPath())
   } catch (e) {
     error.value = e.message
   } finally {

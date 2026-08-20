@@ -5,8 +5,8 @@
       <p>
         {{
           fromQuick
-            ? '刚才看的是此刻。下面是心理评估：再花几分钟说说近况和期望；不是诊断，答案只有你自己看得见。'
-            : '这是心理评估，大约几分钟的心里盘点。不是诊断，答案只有你自己看得见。轻松聊聊时可以不做。'
+            ? '刚才看的是此刻。下面是心理评估：再花几分钟说说近况和期望；完成后会与此刻记录一起进入教练对话。不是诊断。'
+            : '这是心理评估，大约几分钟的心里盘点。完成后会进入教练对话，用来对齐场景与期望。不是诊断；轻松聊聊时可以不做。'
         }}
       </p>
     </div>
@@ -31,10 +31,10 @@
           <label class="option-row">
             <input v-model="form.consent" type="checkbox" required />
             <span v-if="fromQuick">
-              我已知晓：本卷为职场自我评估（非临床诊断），用于教练个性化；与刚才留下的此刻一并使用，不作录用/晋升评判。
+              我已知晓：本卷为职场自我评估（非临床诊断），用于教练个性化；与刚才留下的此刻一并进入后续对话，不作录用/晋升评判。
             </span>
             <span v-else>
-              我已知晓：本问卷为职场自我评估，非临床诊断；用于教练个性化与趋势对照，不作录用/晋升评判。
+              我已知晓：本问卷为职场自我评估，非临床诊断；用于教练对话个性化与趋势对照，不作录用/晋升评判。
             </span>
           </label>
         </fieldset>
@@ -177,7 +177,7 @@
           </label>
         </fieldset>
         <fieldset class="tag-fieldset">
-          <legend>D3. 是否愿意做轻量状态跟踪？</legend>
+          <legend>D3. 是否愿意在关键节点留下此刻记录？</legend>
           <label v-for="o in CHECKIN_OPTS" :key="o.value" class="option-row">
             <input v-model="form.checkinWillingness" type="radio" :value="o.value" required />
             <span>{{ o.label }}</span>
@@ -323,8 +323,8 @@ const SUPPORT_OPTS = [
   { value: 'unsure', label: '不确定' },
 ]
 const CHECKIN_OPTS = [
-  { value: 'daily', label: '愿意，尽量每天' },
-  { value: 'nodes', label: '愿意，关键节点再打' },
+  { value: 'daily', label: '愿意，高压节点前后多留几笔' },
+  { value: 'nodes', label: '愿意，关键节点再测此刻' },
   { value: 'maybe', label: '先看看，不确定' },
   { value: 'no', label: '暂时不想' },
 ]
@@ -335,7 +335,7 @@ const CRISIS_OPTS = [
 ]
 const GOAL_OPTS = [
   '稳住情绪、减少内耗', '把事实和自我评判拆开', '挂面 / 冲突后的复盘',
-  '晋升或向上沟通怎么开口', '谈薪前的心理准备与话术底气', '建立可持续的状态跟踪',
+  '晋升或向上沟通怎么开口', '谈薪前的心理准备与话术底气', '关键节点再留下此刻记录',
   '需要时带我去做简历/面试/谈薪训练',
 ]
 

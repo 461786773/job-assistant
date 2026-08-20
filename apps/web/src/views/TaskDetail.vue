@@ -127,7 +127,9 @@
             </header>
             <div class="pane-body">
               <template v-if="hrReport">
-                <p class="muted tiny-hint">AI 写入会精修对应段落；直接替换按原文→建议替换。</p>
+                <p class="muted tiny-hint">
+                  「AI 写入 / 直接替换」会立刻改写右侧「当前简历」；可点撤销还原。
+                </p>
                 <p v-if="applyMsg" :class="applyOk ? 'success' : 'error'">{{ applyMsg }}</p>
                 <div
                   v-for="(rw, idx) in hrReport.rewrites || []"
@@ -178,33 +180,59 @@
             </div>
           </section>
 
-          <!-- 右：简历详情 -->
-          <section class="pane">
+          <!-- 右：简历正文为主，元信息折叠 -->
+          <section class="pane pane-resume">
             <header class="pane-head pane-head-actions">
-              <h3>简历详情</h3>
+              <h3>简历正文</h3>
               <div class="row pane-actions">
                 <button class="btn btn-primary btn-sm" type="button" :disabled="saving" @click="save">
                   {{ saving ? '保存中…' : '保存' }}
                 </button>
               </div>
             </header>
-            <div class="pane-body form pane-form">
-              <div class="split pane-meta">
-                <label>公司<input v-model="draft.company" /></label>
-                <label>目标岗位<input v-model="draft.targetRole" /></label>
-              </div>
-              <label class="pane-meta">任务标题<input v-model="draft.title" /></label>
-              <label class="pane-meta">上传简历<input type="file" accept=".md,.markdown,.txt,.docx,.pdf" @change="onFile" /></label>
-              <p v-if="fileHint" class="muted pane-meta">{{ fileHint }}</p>
-              <p v-if="fileError" class="error pane-meta">{{ fileError }}</p>
-              <label class="grow-field grow-field-jd">目标 JD<textarea v-model="draft.jdText" /></label>
-              <label class="grow-field grow-field-resume">简历正文<textarea v-model="draft.resumeText" /></label>
-              <label class="pane-meta">备注<textarea v-model="draft.notes" rows="2" /></label>
-              <p v-if="saveMsg" :class="['pane-meta', saveOk ? 'success' : 'error']">{{ saveMsg }}</p>
-              <div class="row pane-meta">
-                <button class="btn btn-danger btn-sm" type="button" :disabled="saving" @click="remove">删除任务</button>
-                <router-link class="btn btn-ghost btn-sm" to="/tasks">返回过关列表</router-link>
-              </div>
+            <div class="pane-body form pane-form pane-form-resume">
+              <p v-if="applyMsg && applyOk" class="success resume-apply-banner">{{ applyMsg }}</p>
+              <label
+                ref="resumeFieldEl"
+                class="grow-field grow-field-resume"
+                :class="{ 'resume-flash': resumeFlash }"
+              >
+                <span class="resume-label-row">
+                  当前简历
+                  <span v-if="resumeFlash" class="resume-flash-tag">刚写入 · 已应用</span>
+                </span>
+                <textarea
+                  ref="resumeTextareaEl"
+                  v-model="draft.resumeText"
+                  placeholder="简历正文会显示在这里。点「AI 写入」后，改动会直接出现在此。"
+                />
+              </label>
+
+              <details class="resume-meta-fold">
+                <summary>公司 / 岗位 / JD / 上传</summary>
+                <div class="resume-meta-body">
+                  <div class="split pane-meta">
+                    <label>公司<input v-model="draft.company" /></label>
+                    <label>目标岗位<input v-model="draft.targetRole" /></label>
+                  </div>
+                  <label class="pane-meta">任务标题<input v-model="draft.title" /></label>
+                  <label class="pane-meta">
+                    上传简历
+                    <input type="file" accept=".md,.markdown,.txt,.docx,.pdf" @change="onFile" />
+                  </label>
+                  <p v-if="fileHint" class="muted pane-meta">{{ fileHint }}</p>
+                  <p v-if="fileError" class="error pane-meta">{{ fileError }}</p>
+                  <label class="grow-field grow-field-jd">目标 JD<textarea v-model="draft.jdText" rows="5" /></label>
+                  <label class="pane-meta">备注<textarea v-model="draft.notes" rows="2" /></label>
+                  <p v-if="saveMsg" :class="['pane-meta', saveOk ? 'success' : 'error']">{{ saveMsg }}</p>
+                  <div class="row pane-meta">
+                    <button class="btn btn-danger btn-sm" type="button" :disabled="saving" @click="remove">
+                      删除任务
+                    </button>
+                    <router-link class="btn btn-ghost btn-sm" to="/tasks">返回过关列表</router-link>
+                  </div>
+                </div>
+              </details>
             </div>
           </section>
         </div>
@@ -335,7 +363,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, STATUS_LABEL } from '../api'
 
@@ -359,6 +387,10 @@ const applyMsg = ref('')
 const applyOk = ref(false)
 const appliedIndexes = ref(new Set())
 const resumeUndoText = ref('')
+const resumeFieldEl = ref(null)
+const resumeTextareaEl = ref(null)
+const resumeFlash = ref(false)
+let resumeFlashTimer = 0
 
 const interviewBusy = ref(false)
 const interviewError = ref('')
@@ -531,14 +563,33 @@ async function runHR() {
   }
 }
 
+async function revealResume() {
+  await nextTick()
+  resumeFieldEl.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  resumeTextareaEl.value?.focus({ preventScroll: true })
+  resumeFlash.value = true
+  window.clearTimeout(resumeFlashTimer)
+  resumeFlashTimer = window.setTimeout(() => {
+    resumeFlash.value = false
+  }, 2400)
+}
+
 async function applyRewrites(body) {
   applyBusy.value = true
   applyMsg.value = ''
   try {
     await api.updateTask(props.id, { ...draft })
     const data = await api.applyHRRewrites(props.id, body)
+    const nextResume = data.task?.resumeText
+    if (typeof nextResume === 'string') {
+      draft.resumeText = nextResume
+    }
     task.value = data.task
     syncDraft(task.value)
+    // 再强制一次，避免 sync 时序导致右侧未刷新
+    if (typeof nextResume === 'string') {
+      draft.resumeText = nextResume
+    }
     const next = new Set(appliedIndexes.value)
     let fail = 0
     for (const r of data.results || []) {
@@ -549,12 +600,14 @@ async function applyRewrites(body) {
     if (data.changed && data.previousResumeText != null) {
       resumeUndoText.value = data.previousResumeText
     }
-    applyOk.value = data.changed
+    applyOk.value = Boolean(data.changed)
     const via = data.mode === 'ai' ? 'AI 精修' : '直接替换'
     if (data.changed && fail === 0) {
-      applyMsg.value = `${via}完成：已更新下方「简历正文」`
+      applyMsg.value = `${via}已写入右侧简历`
+      await revealResume()
     } else if (data.changed) {
-      applyMsg.value = `${via}部分成功（${data.applied} 条），${fail} 条未落地`
+      applyMsg.value = `${via}部分成功（${data.applied} 条），已更新右侧简历`
+      await revealResume()
     } else {
       applyMsg.value = data.mode === 'ai'
         ? 'AI 未能安全改写对应段落（可能缺事实依据），请改建议或手动编辑'
@@ -587,6 +640,7 @@ async function undoResumeApply() {
     appliedIndexes.value = new Set()
     applyOk.value = true
     applyMsg.value = '已撤销到应用前的简历正文'
+    await revealResume()
   } catch (e) {
     applyOk.value = false
     applyMsg.value = e.message

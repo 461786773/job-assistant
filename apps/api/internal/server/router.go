@@ -30,6 +30,7 @@ func NewRouter(h *handler.Handler, cfg config.Config, tokens *auth.TokenManager)
 	}))
 
 	r.Get("/api/health", h.Health)
+	r.Get("/api/copy", h.Copy)
 	r.Post("/api/auth/register", h.Register)
 	r.Post("/api/auth/login", h.Login)
 

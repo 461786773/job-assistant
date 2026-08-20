@@ -1,9 +1,15 @@
 <template>
   <section>
     <div class="hero">
-      <h1>我的评估</h1>
-      <p>心理评估、跟踪快照和职场画像，分开放在这里，方便你回看。</p>
+      <h1>我的</h1>
+      <p>心理评估、跟踪快照和职场画像放在这里回看。对话会合读这三块。</p>
     </div>
+
+    <GuideNote title="这些资料会进入教练对话">
+      <p>
+        之后疏导时，我会合读<strong>最新心理评估</strong>、<strong>职场画像</strong>和<strong>此刻记录</strong>。更新任一一项，下一轮聊天就会跟着变。
+      </p>
+    </GuideNote>
 
     <p v-if="error" class="error">{{ error }}</p>
     <div class="row" style="margin-bottom: 12px; flex-wrap: wrap; gap: 8px">
@@ -45,7 +51,7 @@
           </details>
         </template>
         <template v-else>
-          <p class="muted">还没有心理评估。想被更好地接住时，可以慢慢做一份。</p>
+          <p class="muted">还没有心理评估。做完后，教练疏导会优先参考这份底；想被更好地接住时再慢慢做也行。</p>
           <router-link class="btn btn-primary" style="margin-top: 10px" to="/onboarding/assessment">
             好，我想被更好地理解
           </router-link>
@@ -56,9 +62,25 @@
       <section class="panel" style="margin-bottom: 14px">
         <h2 class="section-title">② 跟踪快照</h2>
         <template v-if="snapshots.length">
-          <p class="muted" style="margin-bottom: 10px">
-            近一周留下 {{ snapshotSummary.count7 }} 笔，心里大约 {{ formatAvg(snapshotSummary.avg7) }}/10。
-            <router-link to="/wellbeing">看这几天还好吗</router-link>
+          <div class="stat-row" style="margin-bottom: 12px">
+            <div>
+              <div class="stat-num">{{ formatAvg(snapshotSummary.avg7) }}</div>
+              <div class="muted">近 7 日心里</div>
+            </div>
+            <div>
+              <div class="stat-num">{{ formatAvg(snapshotSummary.avg30) }}</div>
+              <div class="muted">近 30 日心里</div>
+            </div>
+            <div>
+              <div class="stat-num">{{ snapshotSummary.count7 || '—' }}</div>
+              <div class="muted">近 7 日记下的</div>
+            </div>
+          </div>
+          <p v-if="snapshotSummary.highItems.length" class="muted" style="margin-bottom: 10px">
+            偏沉的日子：
+            <span v-for="(h, i) in snapshotSummary.highItems" :key="h.id">
+              {{ i ? '、' : '' }}{{ formatTime(h.at) }} · {{ h.distressScore }}/10
+            </span>
           </p>
           <ul class="checkin-list">
             <li v-for="q in recentSnapshots" :key="q.id">
@@ -81,11 +103,10 @@
           </ul>
           <div class="row" style="margin-top: 12px; flex-wrap: wrap; gap: 8px">
             <router-link class="btn btn-ghost" to="/wellbeing/quick">再看一眼自己</router-link>
-            <router-link class="btn btn-ghost" to="/wellbeing">看趋势</router-link>
           </div>
         </template>
         <template v-else>
-          <p class="muted">还没有留下此刻。认真聊或主动看看自己时，会记下一笔。</p>
+          <p class="muted">还没有留下此刻。认真聊前或你主动看看自己时，会记下一笔；这些点也会进入下一轮对话。</p>
           <router-link class="btn btn-ghost" style="margin-top: 10px" to="/wellbeing/quick">
             花三分钟看看自己
           </router-link>
@@ -111,7 +132,7 @@
           </div>
         </template>
         <template v-else>
-          <p class="muted">两三分钟的趣味小像，不做诊断，也不挡着你去聊。</p>
+          <p class="muted">两三分钟的趣味小像。有了它，教练会更懂你怎么扛压、怎么沟通；不做诊断，也不挡着你去聊。</p>
           <router-link class="btn btn-ghost" style="margin-top: 10px" to="/bigfive">好，测一下</router-link>
         </template>
       </section>
@@ -122,6 +143,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { api, FEELING_OPTIONS, SCENE_LABEL, TAKEAWAY_OPTIONS } from '../api'
+import GuideNote from '../components/GuideNote.vue'
 
 const baselines = ref([])
 const snapshots = ref([])
@@ -173,15 +195,20 @@ const recentSnapshots = computed(() => snapshots.value.slice(0, 5))
 
 const snapshotSummary = computed(() => {
   const list = snapshots.value || []
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-  const week = list.filter((q) => {
+  const now = Date.now()
+  const inDays = (q, days) => {
     const t = Date.parse(q.createdAt || q.at || '')
-    return !Number.isNaN(t) && t >= weekAgo
-  })
-  const avg = week.length
-    ? week.reduce((s, q) => s + (Number(q.distressScore) || 0), 0) / week.length
-    : 0
-  return { count7: week.length, avg7: avg }
+    return !Number.isNaN(t) && t >= now - days * 24 * 60 * 60 * 1000
+  }
+  const week = list.filter((q) => inDays(q, 7))
+  const month = list.filter((q) => inDays(q, 30))
+  const avg = (arr) =>
+    arr.length ? arr.reduce((s, q) => s + (Number(q.distressScore) || 0), 0) / arr.length : 0
+  const highItems = month
+    .filter((q) => Number(q.distressScore) >= 8)
+    .slice(0, 8)
+    .map((q) => ({ ...q, at: q.createdAt || q.at }))
+  return { count7: week.length, avg7: avg(week), avg30: avg(month), highItems }
 })
 
 /** 我的评估块③：一段合写，不拆双刃/硬伤两栏 */

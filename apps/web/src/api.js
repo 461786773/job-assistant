@@ -53,6 +53,7 @@ async function request(path, options = {}) {
 
 export const api = {
   health: () => request('/api/health'),
+  getCopy: () => request('/api/copy'),
   register: (body) =>
     request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) =>
@@ -215,10 +216,7 @@ export const BOOKING_STATUS_LABEL = {
   cancelled: '已取消',
 }
 
-export const CRISIS_HELP = `如果你正在经历强烈的自我伤害念头，或担心可能伤害他人，请立刻寻求专业或紧急帮助（如 120 / 当地心理援助热线），并联系身边可信的人。本产品是职场心理教练，不能替代持证心理咨询或精神科诊疗。`
-
-/** 登录后：未做过职场画像 → 先进画像（可跳过）；否则进此刻 */
-export function postLoginPath(me) {
-  if (me && !me.hasBigFiveProfile) return '/bigfive?welcome=1'
+/** 登录后进首页：主视觉是开聊，画像不挡门（§0.9.7） */
+export function postLoginPath() {
   return '/home'
 }

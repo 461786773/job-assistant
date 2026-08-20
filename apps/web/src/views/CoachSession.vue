@@ -14,8 +14,35 @@
         <router-link class="btn btn-ghost btn-sm" to="/home">先回到安静的一页</router-link>
       </div>
 
+      <GuideNote
+        v-if="session.status !== 'done' && !session.crisisFlag"
+        title="这轮对话会怎么接你"
+        tone="calm"
+      >
+        <p>{{ contextGuide }}</p>
+        <div class="context-chips">
+          <span class="context-chip" :class="hasBigFive ? 'on' : 'off'">
+            职场画像{{ hasBigFive ? ' · 已带上' : ' · 暂无' }}
+          </span>
+          <span class="context-chip" :class="hasAssessment ? 'on' : 'off'">
+            心理评估{{ hasAssessment ? ' · 已带上' : ' · 暂无' }}
+          </span>
+          <span class="context-chip" :class="hasQuick ? 'on' : 'off'">
+            此刻记录{{ hasQuick ? ' · 已带上' : ' · 暂无' }}
+          </span>
+        </div>
+        <p v-if="!hasBigFive || !hasAssessment || !hasQuick" style="margin-top: 8px">
+          缺的可以稍后补：
+          <router-link v-if="!hasBigFive" to="/bigfive">测画像</router-link>
+          <template v-if="!hasBigFive && (!hasAssessment || !hasQuick)"> · </template>
+          <router-link v-if="!hasAssessment" to="/onboarding/assessment">做心理评估</router-link>
+          <template v-if="!hasAssessment && !hasQuick"> · </template>
+          <router-link v-if="!hasQuick" to="/wellbeing/quick">看一眼自己</router-link>
+        </p>
+      </GuideNote>
+
       <div v-if="session.crisisFlag" class="crisis-banner">
-        {{ CRISIS_HELP }}
+        {{ crisisHelp }}
       </div>
 
       <div class="coach-layout">
@@ -90,7 +117,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, CRISIS_HELP, SCENE_LABEL } from '../api'
+import { api, SCENE_LABEL } from '../api'
+import { crisisHelp } from '../copy'
+import GuideNote from '../components/GuideNote.vue'
 
 const route = useRoute()
 const session = ref(null)
@@ -99,6 +128,9 @@ const error = ref('')
 const draft = ref('')
 const busy = ref(false)
 const sendError = ref('')
+const hasBigFive = ref(false)
+const hasAssessment = ref(false)
+const hasQuick = ref(false)
 
 const sceneHuman = computed(() => {
   const map = {
@@ -113,6 +145,17 @@ const sceneHuman = computed(() => {
 const isTrial = computed(() => {
   const t = session.value?.title || ''
   return t.includes('轻松聊聊') || t.includes('轻试')
+})
+
+const contextGuide = computed(() => {
+  const n = [hasBigFive.value, hasAssessment.value, hasQuick.value].filter(Boolean).length
+  if (n === 3) {
+    return '我会合读你的画像风格、最新心理评估，以及此刻记录，再接话与给下一步——不是泛泛安慰。'
+  }
+  if (n > 0) {
+    return '我会尽量合读你已留下的画像 / 评估 / 此刻记录；缺的部分不影响开聊，补上后会更贴。'
+  }
+  return '你还没留下画像、评估或此刻记录。也能聊；若想让我更接得住，可以会后再补。'
 })
 
 const gateHint = computed(() => {
@@ -132,11 +175,28 @@ const gateHint = computed(() => {
   return null
 })
 
+async function loadProfileHints() {
+  try {
+    const me = await api.me()
+    hasBigFive.value = Boolean(me.hasBigFiveProfile)
+    hasAssessment.value = Boolean(me.hasInitialAssessment)
+    hasQuick.value = Boolean(me.hasQuickSnapshot)
+  } catch {
+    hasBigFive.value = false
+    hasAssessment.value = false
+    hasQuick.value = false
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    session.value = await api.getCoachSession(route.params.id)
+    const [sess] = await Promise.all([
+      api.getCoachSession(route.params.id),
+      loadProfileHints(),
+    ])
+    session.value = sess
   } catch (e) {
     error.value = e.message
   } finally {
@@ -151,6 +211,15 @@ async function send() {
     session.value = await api.replyCoachSession(route.params.id, draft.value.trim())
     draft.value = ''
   } catch (e) {
+    if (e.code === 'crisis_elevated') {
+      sendError.value = e.message || '当前不宜继续常规陪聊'
+      session.value = {
+        ...session.value,
+        crisisFlag: true,
+        status: 'done',
+      }
+      return
+    }
     sendError.value = e.message
   } finally {
     busy.value = false

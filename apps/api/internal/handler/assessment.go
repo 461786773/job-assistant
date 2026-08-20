@@ -211,9 +211,15 @@ func (h *Handler) PatchBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := strings.TrimSpace(body.Status)
-	allowed := map[string]bool{"requested": true, "confirmed": true, "done": true, "cancelled": true}
-	if !allowed[status] {
-		writeErr(w, http.StatusBadRequest, "无效状态")
+	// 用户侧仅允许 requested / cancelled；confirmed / done 由人工侧处理（P1-4）
+	userAllowed := map[string]bool{"requested": true, "cancelled": true}
+	if !userAllowed[status] {
+		writeErr(w, http.StatusBadRequest, "用户只能设为「待确认」或「已取消」；确认与完成需人工处理")
+		return
+	}
+	// 已完成的预约不可再改
+	if b.Status == "done" {
+		writeErr(w, http.StatusBadRequest, "已完成的预约不能再改状态")
 		return
 	}
 	b.Status = status

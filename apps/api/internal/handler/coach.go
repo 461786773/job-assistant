@@ -10,6 +10,7 @@ import (
 	"github.com/zhangyongjie/job-assistant/internal/bigfive"
 	"github.com/zhangyongjie/job-assistant/internal/coach"
 	"github.com/zhangyongjie/job-assistant/internal/db"
+	"github.com/zhangyongjie/job-assistant/internal/prompts"
 )
 
 type createCoachBody struct {
@@ -29,6 +30,24 @@ func startOfLocalDay(now time.Time) time.Time {
 	t := now.In(loc)
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+}
+
+// writeCrisisElevated 基线 crisisLevel=elevated：硬停正式疏导。
+func writeCrisisElevated(w http.ResponseWriter) {
+	writeJSON(w, http.StatusForbidden, map[string]any{
+		"error":    prompts.CrisisElevatedError,
+		"code":     "crisis_elevated",
+		"help":     prompts.CrisisHelp,
+		"redirect": "/booking",
+	})
+}
+
+func (h *Handler) userCrisisElevated(userID string) (bool, error) {
+	latest, err := h.Store.LatestInitialAssessment(userID)
+	if err != nil {
+		return false, err
+	}
+	return latest != nil && latest.CrisisLevel == "elevated", nil
 }
 
 func (h *Handler) ListCoachSessions(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +127,15 @@ func (h *Handler) CreateCoachSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if mode != "trial" && mode != "formal" {
 		writeErr(w, http.StatusBadRequest, "mode 需为 trial 或 formal")
+		return
+	}
+
+	// P0-6：基线 elevated → 禁止新建正式疏导；轻松聊也硬停（避免绕过）
+	if elevated, err := h.userCrisisElevated(claims.UserID); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	} else if elevated {
+		writeCrisisElevated(w)
 		return
 	}
 
@@ -208,6 +236,16 @@ func (h *Handler) ReplyCoachSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "会话不存在")
 		return
 	}
+
+	// P0-6：elevated 时禁止继续正式疏导（轻松聊会话也一律硬停，避免绕过）
+	if elevated, err := h.userCrisisElevated(claims.UserID); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	} else if elevated {
+		writeCrisisElevated(w)
+		return
+	}
+
 	var body struct {
 		Message string `json:"message"`
 	}
